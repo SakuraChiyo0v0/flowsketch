@@ -5,6 +5,7 @@ import { DEFAULT_STATE, DEVICE_SIZE } from '../model/types'
 import { paintTree } from '../render/paint'
 import { frameSize, OVERLAY_LABEL } from '../render/frame'
 import { useProject, useStore } from '../store'
+import { runStep } from '../ai/runSteps'
 
 const DND_TYPE = 'application/x-flowsketch'
 
@@ -16,6 +17,8 @@ export function PageEditor() {
   const select = useStore((s) => s.select)
   const update = useStore((s) => s.update)
   const openScreen = useStore((s) => s.openScreen)
+  const busy = useStore((s) => s.busy)
+  const showToast = useStore((s) => s.showToast)
   const [zoom, setZoom] = useState(1)
   const stageRef = useRef<HTMLDivElement>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
@@ -31,10 +34,12 @@ export function PageEditor() {
     const el = stageRef.current
     if (!el) return
     const availH = el.clientHeight - 64
-    const availW = el.clientWidth - 2 * 170 - 96
+    // stage padding 48 + 4 flex gaps of 24 + two io columns
+    const availW = el.clientWidth - 2 * 150 - 48 - 4 * 24 - 8
     const dev = DEVICE_SIZE[project.device]
-    const z = Math.min(1, availH / Math.min(fs.h, dev.h * 1.15), availW / fs.w)
-    setZoom(Math.max(0.4, Math.floor(z * 10) / 10))
+    // mobile: fit height; web: fit width (pages are wide, vertical scroll is fine)
+    const z = project.device === 'mobile' ? Math.min(1, availH / Math.min(fs.h, dev.h * 1.15), availW / fs.w) : Math.min(1, availW / fs.w)
+    setZoom(Math.max(0.25, Math.floor(z * 20) / 20))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitKey])
 
@@ -110,7 +115,22 @@ export function PageEditor() {
           ))}
         </div>
         <div className="spacer" />
-        <button className="btn ghost sm" onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.1).toFixed(1)))}>−</button>
+        <button
+          className="btn ghost sm"
+          disabled={!!busy}
+          title="用 AI 重新生成这个页面所有状态的布局"
+          onClick={async () => {
+            if (!confirm(`用 AI 重新生成「${screen.name}」的布局？当前布局会被覆盖（可撤销）。`)) return
+            try {
+              showToast(await runStep('layouts', { screenIds: [screen.id] }))
+            } catch (e) {
+              showToast((e as Error).message)
+            }
+          }}
+        >
+          ✦ AI 重做布局
+        </button>
+        <button className="btn ghost sm" onClick={() => setZoom((z) => Math.max(0.25, +(z - 0.1).toFixed(2)))}>−</button>
         <button className="zoom" title="重置为 100%" onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button>
         <button className="btn ghost sm" onClick={() => setZoom((z) => Math.min(2, +(z + 0.1).toFixed(1)))}>＋</button>
       </div>
