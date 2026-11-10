@@ -5,7 +5,7 @@ import { DEVICE_SIZE, DEFAULT_STATE } from '../model/types'
 import { Thumb } from '../render/Thumb'
 import { frameSize, OVERLAY_LABEL } from '../render/frame'
 import { useStore } from '../store'
-import { NODE_SIZE } from './autoLayout'
+import { NODE_SIZE, nodeSize } from './autoLayout'
 
 export interface ScreenNodeData extends Record<string, unknown> {
   screen: Screen
@@ -23,20 +23,20 @@ export const ScreenNode = memo(function ScreenNode({ data, selected }: NodeProps
   const openScreen = useStore((s) => s.openScreen)
   const { screen, entry, issue } = data
   const overlay = screen.kind === 'overlay'
-  const size = overlay ? NODE_SIZE.overlay : NODE_SIZE.page
+  const size = nodeSize(project, screen.id)
   const def = screen.states.find((s) => s.id === DEFAULT_STATE) ?? screen.states[0]
   const fs = overlay ? frameSize(project, screen, def.id) : DEVICE_SIZE[project.device]
   const thumbW = overlay ? size.w - 24 : size.w - 12
   const extra = screen.states.length - 1
   return (
     <div className={`fnode ${overlay ? 'overlay' : 'page'} ${selected ? 'sel' : ''} ${issue ? `issue-${issue}` : ''}`} style={{ width: size.w }} onDoubleClick={() => openScreen(screen.id)}>
-      <Handle type="target" position={Position.Left} />
+      <Handle type="target" position={Position.Left} style={{ top: 24 + (size.h - 24) / 2 }} />
       <div className="fnode-title">
         {entry && <span className="entry-dot" title="入口页">▶</span>}
         <span className="name">{screen.name}</span>
         {overlay && <span className="tag">{OVERLAY_LABEL[screen.overlayType ?? 'modal']}</span>}
       </div>
-      <div className={`fnode-frame ${extra > 0 ? 'stacked' : ''}`} style={{ height: overlay ? undefined : size.h - 48 }}>
+      <div className={`fnode-frame ${extra > 0 ? 'stacked' : ''}`} style={{ height: overlay ? undefined : Math.min(size.h - 30, (thumbW / fs.w) * DEVICE_SIZE[project.device].h) }}>
         <Thumb root={def.root} w={fs.w} h={Math.min(fs.h, overlay ? fs.h : DEVICE_SIZE[project.device].h)} width={thumbW} />
       </div>
       {screen.states.length > 1 && (
@@ -55,7 +55,7 @@ export const ScreenNode = memo(function ScreenNode({ data, selected }: NodeProps
           ))}
         </div>
       )}
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={Position.Right} style={{ top: 24 + (size.h - 24) / 2 }} />
     </div>
   )
 })

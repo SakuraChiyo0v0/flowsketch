@@ -10,10 +10,16 @@ export const NODE_SIZE = {
   condition: { w: 120, h: 96 },
 }
 
+const WEB_SIZE = {
+  page: { w: 300, h: 228 },
+  overlay: { w: 220, h: 180 },
+}
+
 export function nodeSize(p: Project, id: string) {
   const s = p.screens.find((x) => x.id === id)
   if (!s) return NODE_SIZE.condition
-  return s.kind === 'overlay' ? NODE_SIZE.overlay : NODE_SIZE.page
+  const table = p.device === 'web' ? WEB_SIZE : NODE_SIZE
+  return s.kind === 'overlay' ? table.overlay : table.page
 }
 
 /** Layered left-to-right layout. The LLM never computes coordinates. */
@@ -35,7 +41,9 @@ export async function autoLayout(p: Project): Promise<Record<string, { x: number
     },
     children: ids.map((id) => {
       const sz = nodeSize(p, id)
-      return { id, width: sz.w, height: sz.h + 28 }
+      const multi = (p.screens.find((s) => s.id === id)?.states.length ?? 0) > 1
+      // node is title(24) + frame + optional state chips row(~30)
+      return { id, width: sz.w, height: sz.h + (multi ? 34 : 8) }
     }),
     // back/close edges distort layering, so leave them out of the layout graph
     edges: p.transitions
