@@ -175,7 +175,11 @@ function Chat({ pending, clearPending }: { pending?: string | null; clearPending
     try {
       const st = useStore.getState()
       const cur = st.project()
-      const history = cur.chat.slice(-10).map((c) => ({ role: c.role, content: c.role === 'assistant' ? JSON.stringify({ reply: c.text, summary: c.proposal?.summary ?? '', ops: [] }) : c.text }))
+      // past assistant turns: tell the model what happened to its proposal (ops are not resent
+      // to save tokens; the current design state in the prompt already reflects accepted ones)
+      const fate = (c: (typeof cur.chat)[number]) =>
+        !c.proposal ? '' : c.proposal.status === 'accepted' ? `（用户已接受这 ${c.proposal.ops.length} 项修改，已体现在当前设计中）` : c.proposal.status === 'rejected' ? '（用户拒绝了这次修改，设计未变）' : '（用户尚未确认这次修改，设计未变）'
+      const history = cur.chat.slice(-10).map((c) => ({ role: c.role, content: c.role === 'assistant' ? JSON.stringify({ reply: c.text + fate(c), summary: c.proposal?.summary ?? '', ops: [] }) : c.text }))
       const scr = cur.screens.find((s) => s.id === screenId)
       const focus = view === 'page' && scr ? `页面「${scr.name}」(id: ${scr.id}) 的状态 ${stateId}` : undefined
       const res = await chatJson(st.ai, chatPrompt(cur, history, focus), parseChat, { signal, maxTokens: 16000, onProgress: (t) => useStore.getState().setBusy(`AI 正在准备修改 · 已收到 ${progressHint(t)}`) })
@@ -316,7 +320,11 @@ function BusyBar({ text }: { text: string }) {
 }
 
 export function AiPanel() {
-  const [tab, setTab] = useState<'guide' | 'chat' | 'check'>('guide')
+  const [tab, setTab] = useState<'guide' | 'chat' | 'check'>(() => {
+    // after a reload, land where the work is: unfinished guide, otherwise chat
+    const p = useStore.getState().project()
+    return p.guideStep < 4 && !p.chat.length ? 'guide' : 'chat'
+  })
   const project = useProject()
   const busy = useStore((s) => s.busy)
   const issues = useMemo(() => checkProject(project), [project])
@@ -328,6 +336,13 @@ export function AiPanel() {
   if (lastProject !== project.id) {
     setLastProject(project.id)
     setTab(project.guideStep < 4 ? 'guide' : 'chat')
+  }
+  // a chat reply with a pending proposal pulls the panel to the chat tab
+  const pendingId = project.chat.findLast((c) => c.proposal?.status === 'pending')?.id
+  const [lastPending, setLastPending] = useState(pendingId)
+  if (pendingId !== lastPending) {
+    setLastPending(pendingId)
+    if (pendingId) setTab('chat')
   }
 
   return (

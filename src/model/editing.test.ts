@@ -210,3 +210,15 @@ describe('layout binding', () => {
     expect(p.transitions[0].elementId).toBe('next')
   })
 })
+
+describe('column sizing', () => {
+  it('growing buttons fill the column; valign centers content', () => {
+    const root = normalizeElement({ type: 'column', props: { pad: 16, gap: 16 }, children: [{ id: 'a', type: 'button', label: '呼叫', props: { size: 'xl', grow: true } }, { id: 'b', type: 'button', label: '留言', props: { size: 'xl', grow: true } }] })
+    const b = layoutTree(root, 375, 812)
+    const a = b.find((x) => x.el.id === 'a')!
+    expect(a.h).toBeGreaterThan(300)
+    const c = normalizeElement({ type: 'column', props: { valign: 'center' }, children: [{ id: 't', type: 'title', label: 'x' }] })
+    const t = layoutTree(c, 375, 812).find((x) => x.el.id === 't')!
+    expect(t.y).toBeGreaterThan(300)
+  })
+})

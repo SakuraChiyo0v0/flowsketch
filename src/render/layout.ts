@@ -15,6 +15,9 @@ export interface Box {
 
 const num = (v: unknown, d: number) => (typeof v === 'number' && isFinite(v) ? v : typeof v === 'string' && v.trim() !== '' && !isNaN(+v) ? +v : d)
 
+export const titleSize = (p: Record<string, unknown>) => (p.size === 'xl' ? 30 : p.size === 'lg' ? 22 : p.size === 'sm' ? 15 : 18)
+export const textSize = (p: Record<string, unknown>) => (p.size === 'xl' ? 20 : p.size === 'lg' ? 16 : 13)
+
 /** Approximate text width (CJK chars are wider). */
 /** Approximate text width (calibrated against PingFang / YaHei at weight 500). */
 export function textWidth(s: string, size = 13) {
@@ -55,17 +58,18 @@ function leafHeight(el: WElement, w: number): number {
     case 'nav':
       return 56
     case 'title': {
-      const size = p.size === 'lg' ? 22 : p.size === 'sm' ? 15 : 18
+      const size = titleSize(p)
       return Math.min(3, wrapCount(el.label ?? '', Math.max(40, w), size)) * (size + 8)
     }
     case 'text': {
       if (el.label) {
-        return Math.min(6, wrapCount(el.label, Math.max(40, w), 13)) * 19
+        const ts = textSize(p)
+        return Math.min(6, wrapCount(el.label, Math.max(40, w), ts)) * Math.round(ts * 1.45)
       }
       return num(p.lines, 2) * 14
     }
     case 'button':
-      return p.variant === 'text' ? 28 : p.size === 'lg' ? 64 : p.size === 'sm' ? 32 : 44
+      return p.variant === 'text' ? 28 : p.size === 'xl' ? 88 : p.size === 'lg' ? 64 : p.size === 'sm' ? 32 : 44
     case 'input':
     case 'search':
       return 42
@@ -141,16 +145,14 @@ function leafWidth(el: WElement): number | undefined {
     case 'badge':
       return textWidth(el.label ?? '标签', 12) + 20
     case 'button': {
-      const fs = p.size === 'lg' ? 18 : p.size === 'sm' ? 12 : 14
+      const fs = p.size === 'xl' ? 24 : p.size === 'lg' ? 18 : p.size === 'sm' ? 12 : 14
       // text width (+ icon) + padding; slight overestimate so labels don't clip
       return Math.max(p.size === 'sm' ? 56 : 72, textWidth(el.label ?? '按钮', fs) * 1.04 + (p.icon ? fs + 6 : 0) + 32)
     }
-    case 'title': {
-      const size = p.size === 'lg' ? 22 : p.size === 'sm' ? 15 : 18
-      return textWidth(el.label ?? '', size) + 4
-    }
+    case 'title':
+      return textWidth(el.label ?? '', titleSize(p)) + 4
     case 'text':
-      return el.label ? textWidth(el.label, 13) + 4 : undefined
+      return el.label ? textWidth(el.label, textSize(p)) + 4 : undefined
     case 'toggle':
     case 'checkbox':
       return undefined
@@ -296,6 +298,11 @@ function place(el: WElement, x: number, y: number, w: number, h: number, depth: 
   const extra = Math.max(0, ih - used)
   if (growers.length && extra > 0) growers.forEach((m) => (m.h += extra / growers.length))
   let cy = iy
+  // vertical align for columns that don't fill: props.valign center|end
+  if (!growers.length && extra > 0) {
+    if (p.valign === 'center') cy += extra / 2
+    else if (p.valign === 'end') cy += extra
+  }
   // column align: center/end positions fixed-width leaves horizontally; icons and
   // avatars are always centered when the column itself is centered
   const align = p.align

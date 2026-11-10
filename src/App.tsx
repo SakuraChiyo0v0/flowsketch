@@ -1,3 +1,4 @@
+import { ErrorBoundary } from './ErrorBoundary'
 import { useEffect } from 'react'
 import { FlowCanvas } from './flow/FlowCanvas'
 import { PageEditor } from './page/PageEditor'
@@ -126,21 +127,29 @@ export default function App() {
     <div className="app">
       <TopBar />
       <div className="main">
-        <Sidebar />
+        <ErrorBoundary compact name="左侧栏">
+          <Sidebar />
+        </ErrorBoundary>
         <section className="center">
-          {view === 'flow' ? (
-            <>
-              <FlowCanvas />
-              <FlowToolbar />
-              {empty && <EmptyCanvas />}
-            </>
-          ) : (
-            <PageEditor />
-          )}
+          <ErrorBoundary compact name={view === 'flow' ? '流程图' : '页面编辑'} key={view}>
+            {view === 'flow' ? (
+              <>
+                <FlowCanvas />
+                <FlowToolbar />
+                {empty && <EmptyCanvas />}
+              </>
+            ) : (
+              <PageEditor />
+            )}
+          </ErrorBoundary>
         </section>
         <aside className="right">
-          <Inspector />
-          <AiPanel />
+          <ErrorBoundary compact name="属性">
+            <Inspector />
+          </ErrorBoundary>
+          <ErrorBoundary compact name="AI 面板">
+            <AiPanel />
+          </ErrorBoundary>
         </aside>
       </div>
       {toast && <div className="toast">{toast}</div>}

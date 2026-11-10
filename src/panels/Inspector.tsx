@@ -233,6 +233,7 @@ const PROP_FIELDS:Partial<Record<WElement['type'], { key: string; label: string;
     { key: 'grow', label: '占满剩余', kind: 'bool' },
     { key: 'w', label: '固定宽度', kind: 'num' },
     { key: 'align', label: '水平对齐', kind: 'select', options: ['start', 'center', 'end'] },
+    { key: 'valign', label: '垂直对齐', kind: 'select', options: ['start', 'center', 'end'] },
     { key: 'border', label: '边框', kind: 'bool' },
     { key: 'fill', label: '灰底', kind: 'bool' },
   ],
@@ -256,11 +257,12 @@ const PROP_FIELDS:Partial<Record<WElement['type'], { key: string; label: string;
     { key: 'items', label: '菜单项', kind: 'text' },
     { key: 'action', label: '右侧按钮', kind: 'text' },
   ],
-  title: [{ key: 'size', label: '字号', kind: 'select', options: ['lg', 'md', 'sm'] }],
-  text: [{ key: 'lines', label: '占位行数', kind: 'num' }],
+  title: [{ key: 'size', label: '字号', kind: 'select', options: ['md', 'sm', 'lg', 'xl'] }],
+  text: [
+    { key: 'size', label: '字号', kind: 'select', options: ['', 'lg', 'xl'] },{ key: 'lines', label: '占位行数', kind: 'num' }],
   button: [
     { key: 'variant', label: '样式', kind: 'select', options: ['primary', 'secondary', 'text', 'danger'] },
-    { key: 'size', label: '尺寸', kind: 'select', options: ['md', 'sm', 'lg'] },
+    { key: 'size', label: '尺寸', kind: 'select', options: ['md', 'sm', 'lg', 'xl'] },
     { key: 'icon', label: '图标', kind: 'select', options: ['', ...iconNames()] },
     { key: 'grow', label: '撑满', kind: 'bool' },
   ],

@@ -1,5 +1,5 @@
 import type { WElement } from '../model/types'
-import { layoutTree, textWidth, type Box } from './layout'
+import { layoutTree, textWidth, type Box, titleSize, textSize } from './layout'
 
 // Grayscale low-fidelity painter. Output is SVG markup so the editor, the flow
 // thumbnails and the exporter all draw identically.
@@ -181,11 +181,15 @@ function paintBox(b: Box): string {
       return s
     }
     case 'title': {
-      const size = p.size === 'lg' ? 22 : p.size === 'sm' ? 15 : 18
+      const size = titleSize(p)
       return para(x, y, label, { size, weight: 600, lineH: size + 8, maxW: w, maxLines: Math.max(1, Math.round(h / (size + 8))) })
     }
     case 'text':
-      if (label) return para(x, y, label, { size: 13, color: C.mid, lineH: 19, maxW: w, maxLines: Math.max(1, Math.round(h / 19)) })
+      if (label) {
+        const ts = textSize(p)
+        const lh = Math.round(ts * 1.45)
+        return para(x, y, label, { size: ts, color: p.size ? C.ink : C.mid, lineH: lh, maxW: w, maxLines: Math.max(1, Math.round(h / lh)) })
+      }
       return lines(x, y, w, Number(p.lines ?? 2))
     case 'button': {
       const v = p.variant ?? 'primary'
@@ -199,13 +203,13 @@ function paintBox(b: Box): string {
       }
       const filled = v === 'primary'
       const danger = v === 'danger'
-      const fs = p.size === 'lg' ? 18 : p.size === 'sm' ? 12 : 14
+      const fs = p.size === 'xl' ? 24 : p.size === 'lg' ? 18 : p.size === 'sm' ? 12 : 14
       const ic = p.icon ? String(p.icon) : ''
       const tw = Math.min(textWidth(label, fs), w - 16 - (ic ? fs + 6 : 0))
       const startX = x + w / 2 - (tw + (ic ? fs + 6 : 0)) / 2
       const col = filled ? C.bg : danger ? '#b91c1c' : C.ink
       return (
-        rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill: filled ? C.ink : C.bg, stroke: filled ? undefined : danger ? '#fca5a5' : C.line, r: p.size === 'lg' ? 14 : 8 }) +
+        rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill: filled ? C.ink : C.bg, stroke: filled ? undefined : danger ? '#fca5a5' : C.line, r: p.size === 'lg' || p.size === 'xl' ? 16 : 8 }) +
         (ic ? icon(ic, startX, y + h / 2 - fs / 2 - 1, fs + 2, col) : '') +
         text(ic ? startX + fs + 6 : x + w / 2, y + h / 2, label, { size: fs, color: col, anchor: ic ? undefined : 'middle', weight: 500, maxW: w - 16 - (ic ? fs + 6 : 0) })
       )

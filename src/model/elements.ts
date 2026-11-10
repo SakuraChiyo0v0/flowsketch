@@ -11,14 +11,14 @@ export interface ElementMeta {
 }
 
 export const ELEMENT_META: Record<ElementType, ElementMeta> = {
-  column: { type: 'column', name: '纵向容器', container: true, defaults: { props: { gap: 8, pad: 0 } }, hint: '子元素纵向排列；props: gap, pad, grow, align(center|end，让图标/头像/短文字居中)' },
+  column: { type: 'column', name: '纵向容器', container: true, defaults: { props: { gap: 8, pad: 0 } }, hint: '子元素纵向排列；props: gap, pad, grow, align(center|end，让图标/头像/短文字水平居中), valign(center|end，内容在剩余高度里垂直居中/靠下)；按钮加 grow=true 会撑满纵向剩余高度（超大按钮）' },
   row: { type: 'row', name: '横向容器', container: true, defaults: { props: { gap: 8, pad: 0 } }, hint: '子元素横向排列；props: gap, pad, grow, align(start|center|end|between)' },
   card: { type: 'card', name: '卡片', container: true, defaults: { props: { pad: 12, gap: 6 } }, hint: '带边框的容器，子元素纵向排列；props: pad, gap, align' },
   header: { type: 'header', name: '顶部栏', container: false, defaults: { label: '标题', props: { back: true } }, hint: 'label=标题；props: back(bool), action(右侧图标名)' },
   nav: { type: 'nav', name: '导航栏(Web)', container: false, defaults: { label: 'Logo', props: { items: '首页,产品,关于' } }, hint: 'Web 顶部导航；label=品牌名；props.items 逗号分隔' },
-  title: { type: 'title', name: '标题文字', container: false, defaults: { label: '标题' }, hint: 'label=文字；props.size: lg|md|sm' },
-  text: { type: 'text', name: '文本', container: false, defaults: { props: { lines: 2 } }, hint: 'label 可选；不给 label 时画 lines 行占位线' },
-  button: { type: 'button', name: '按钮', container: false, defaults: { label: '按钮', props: { variant: 'primary' } }, hint: 'label=文字；props.variant: primary|secondary|text|danger；props.size: sm|md|lg（lg=大号醒目按钮）；props.icon=图标名' },
+  title: { type: 'title', name: '标题文字', container: false, defaults: { label: '标题' }, hint: 'label=文字；props.size: xl|lg|md|sm（xl 用于老人/大字模式）' },
+  text: { type: 'text', name: '文本', container: false, defaults: { props: { lines: 2 } }, hint: 'label 可选；不给 label 时画 lines 行占位线；props.size: lg|md' },
+  button: { type: 'button', name: '按钮', container: false, defaults: { label: '按钮', props: { variant: 'primary' } }, hint: 'label=文字；props.variant: primary|secondary|text|danger；props.size: sm|md|lg|xl（lg/xl=大号醒目按钮）；props.icon=图标名' },
   input: { type: 'input', name: '输入框', container: false, defaults: { label: '请输入' }, hint: 'label=占位文字' },
   search: { type: 'search', name: '搜索框', container: false, defaults: { label: '搜索' }, hint: 'label=占位文字' },
   image: { type: 'image', name: '图片占位', container: false, defaults: { props: { h: 140 } }, hint: 'props.h 高度' },
