@@ -59,8 +59,10 @@ export function checkProject(p: Project): Issue[] {
 
   // reachability from entry (overlays reachable via open; conditions pass through)
   if (entry) {
-    const seen = new Set<string>([entry])
-    const stack = [entry]
+    // external entries (menu bar, notifications, deep links) start their own paths
+    const starts = [entry, ...p.screens.filter((s) => s.externalEntry).map((s) => s.id)]
+    const seen = new Set<string>(starts)
+    const stack = [...starts]
     while (stack.length) {
       const cur = stack.pop()!
       for (const t of p.transitions) {
@@ -71,7 +73,8 @@ export function checkProject(p: Project): Issue[] {
       }
     }
     for (const s of p.screens) {
-      if (!seen.has(s.id)) {
+      // screens opened from outside the app (menu bar, notification, deep link) are entry points too
+      if (!seen.has(s.id) && !s.externalEntry) {
         issues.push({
           id: `unreachable-${s.id}`,
           level: 'warning',
@@ -79,6 +82,7 @@ export function checkProject(p: Project): Issue[] {
           detail: '从入口页出发，没有任何路径能走到这个页面。',
           targetId: s.id,
           aiFix: `「${s.name}」(id: ${s.id}) 从入口页无法到达，请补充合理的入口连线。`,
+          fix: { label: '它是外部入口', ops: [{ op: 'updateScreen', id: s.id, externalEntry: true }] },
         })
       }
     }
@@ -88,7 +92,8 @@ export function checkProject(p: Project): Issue[] {
     const o = out.get(s.id) ?? 0
     if (s.kind === 'overlay') {
       const closes = p.transitions.some((t) => t.from === s.id)
-      if (!closes) {
+      // toasts dismiss themselves; only flag modals/sheets/drawers
+      if (!closes && s.overlayType !== 'toast') {
         issues.push({
           id: `overlay-noclose-${s.id}`,
           level: 'warning',

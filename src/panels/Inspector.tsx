@@ -200,6 +200,12 @@ function ScreenProps({ s }: { s: Screen }) {
         ))}
       </select>
       {project.entryId === s.id && <div className="insp-hint">▶ 这是入口页面</div>}
+      {project.entryId !== s.id && (
+        <label className="check-row" title="菜单栏/托盘、系统通知、外部链接等直接打开的界面，不需要从入口页走到">
+          <input type="checkbox" checked={!!s.externalEntry} onChange={(e) => patch([{ op: 'updateScreen', id: s.id, externalEntry: e.target.checked }])} />
+          外部入口（菜单栏、通知、链接直接打开）
+        </label>
+      )}
       <div className="insp-actions">
         <button className="btn sm" onClick={() => openScreen(s.id)}>编辑布局</button>
         {s.id !== project.entryId && s.kind === 'page' && <button className="btn ghost sm" onClick={() => patch([{ op: 'setEntry', id: s.id }])}>设为入口</button>}

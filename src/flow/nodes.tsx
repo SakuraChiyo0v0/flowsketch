@@ -35,6 +35,7 @@ export const ScreenNode = memo(function ScreenNode({ data, selected }: NodeProps
       <Handle type="target" position={Position.Left} style={{ top: 24 + (size.h - 24) / 2 }} />
       <div className="fnode-title">
         {entry && <span className="entry-dot" title="入口页">▶</span>}
+        {!entry && screen.externalEntry && <span className="entry-dot ext" title="外部入口">↗</span>}
         <span className="name">{screen.name}</span>
         {overlay && <span className="tag">{OVERLAY_LABEL[screen.overlayType ?? 'modal']}</span>}
       </div>

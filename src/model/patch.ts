@@ -124,6 +124,7 @@ function applyOne(p: Project, op: PatchOp, errors: string[]): Project {
         description: s.description,
         states,
       }
+      if (s.externalEntry) screen.externalEntry = true
       if (screen.kind === 'overlay') screen.overlayType = s.overlayType ?? 'modal'
       const next = { ...p, screens: [...p.screens, screen] }
       if (!next.entryId && screen.kind === 'page') next.entryId = id
@@ -142,6 +143,7 @@ function applyOne(p: Project, op: PatchOp, errors: string[]): Project {
           if (op.name) n.name = op.name
           if (op.description !== undefined) n.description = op.description
           if (op.kind) n.kind = op.kind
+          if (op.externalEntry !== undefined) n.externalEntry = op.externalEntry || undefined
           if (op.overlayType) n.overlayType = op.overlayType
           if (n.kind === 'overlay' && !n.overlayType) n.overlayType = 'modal'
           return n

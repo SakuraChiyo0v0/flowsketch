@@ -67,6 +67,8 @@ export interface Screen {
   kind: ScreenKind
   overlayType?: OverlayType
   description?: string
+  /** opened from outside the app (menu bar, notification, deep link); counts as an entry point */
+  externalEntry?: boolean
   states: ScreenState[]
 }
 
@@ -153,6 +155,7 @@ export interface ScreenInput {
   kind?: ScreenKind
   overlayType?: OverlayType
   description?: string
+  externalEntry?: boolean
   states?: { id: string; name: string; root?: unknown }[]
 }
 
@@ -165,7 +168,7 @@ export type TransitionInput = Omit<Transition, 'id' | 'kind' | 'action' | 'trigg
 
 export type PatchOp =
   | { op: 'addScreen'; screen: ScreenInput }
-  | { op: 'updateScreen'; id: string; name?: string; description?: string; kind?: ScreenKind; overlayType?: OverlayType }
+  | { op: 'updateScreen'; id: string; name?: string; description?: string; kind?: ScreenKind; overlayType?: OverlayType; externalEntry?: boolean }
   | { op: 'removeScreen'; id: string }
   | { op: 'addState'; screenId: string; state: { id: string; name: string; root?: unknown } }
   | { op: 'removeState'; screenId: string; stateId: string }

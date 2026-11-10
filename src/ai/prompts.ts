@@ -121,6 +121,7 @@ export function sitemapPrompt(p: Project) {
 - 每个页面列出它的关键状态：第一个必须是 {"id":"default","name":"默认"}，再补充对交互逻辑有意义的状态，如 empty(空)、failed(失败)、full(已满) 等。每个页面最多 3 个状态；通用的「加载中」不要列。
 - 确认、登录拦截、选择器这类不应该是整页的，做成浮层。
 - id 用英文小写短横线。entry 是用户打开应用看到的第一个页面。
+- 不经过应用主界面、从系统直接打开的界面（菜单栏/托盘弹出的迷你窗口、系统通知、桌面小组件、外部链接打开的页面）加 "externalEntry":true。
 - 一般 6-12 个节点，覆盖主要功能即可，不要为次要功能单独开页面。
 输出格式：
 {"entry":"home","screens":[{"id":"home","name":"首页","kind":"page","description":"一句话","states":[{"id":"default","name":"默认"}]},{"id":"login","name":"登录","kind":"overlay","overlayType":"modal","states":[{"id":"default","name":"默认"}]}]}`,
@@ -129,7 +130,7 @@ export function sitemapPrompt(p: Project) {
 }
 
 export function sitemapToOps(v: unknown, p: Project): PatchOp[] {
-  const o = v as { entry?: string; screens?: { id: string; name: string; kind?: string; overlayType?: string; description?: string; states?: { id: string; name: string }[] }[] }
+  const o = v as { entry?: string; screens?: { id: string; name: string; kind?: string; overlayType?: string; description?: string; externalEntry?: boolean; states?: { id: string; name: string }[] }[] }
   if (!Array.isArray(o?.screens) || !o.screens.length) throw new Error('缺少 screens 数组')
   const ops: PatchOp[] = []
   const existing = new Set(p.screens.map((s) => s.id))
@@ -149,6 +150,7 @@ export function sitemapToOps(v: unknown, p: Project): PatchOp[] {
         kind: s.kind === 'overlay' ? 'overlay' : 'page',
         overlayType: (['modal', 'sheet', 'drawer', 'toast'].includes(s.overlayType ?? '') ? s.overlayType : 'modal') as 'modal',
         description: s.description,
+        externalEntry: s.externalEntry === true || undefined,
         states: (s.states ?? []).filter((st) => st?.id).map((st) => ({ id: st.id, name: st.name })),
       },
     })
