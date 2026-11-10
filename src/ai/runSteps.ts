@@ -1,7 +1,7 @@
 import { useStore } from '../store'
 import { chatJson } from './client'
 import { featuresPrompt, featuresToOps, flowsPrompt, flowsToOps, layoutPrompt, layoutToOps, sitemapPrompt, sitemapToOps, STEPS, type StepKey } from './prompts'
-import { relayout } from '../flow/FlowCanvas'
+import { relayout } from '../flow/autoLayout'
 import type { PatchOp } from '../model/types'
 
 let controller: AbortController | null = null

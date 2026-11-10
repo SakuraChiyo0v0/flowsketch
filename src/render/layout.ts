@@ -90,10 +90,12 @@ function leafWidth(el: WElement): number | undefined {
       return textWidth(el.label ?? '标签', 12) + 20
     case 'button':
       return Math.max(72, textWidth(el.label ?? '按钮', 14) + 32)
-    case 'title':
-      return Math.min(240, textWidth(el.label ?? '', 18) + 4)
+    case 'title': {
+      const size = p.size === 'lg' ? 22 : p.size === 'sm' ? 15 : 18
+      return textWidth(el.label ?? '', size) + 4
+    }
     case 'text':
-      return el.label ? Math.min(220, textWidth(el.label, 13) + 4) : undefined
+      return el.label ? textWidth(el.label, 13) + 4 : undefined
     case 'toggle':
     case 'checkbox':
       return undefined
@@ -142,9 +144,23 @@ function rowWidths(el: WElement, innerW: number): number[] {
   const kids = el.children ?? []
   const gap = num(el.props?.gap, 8)
   const fixed = kids.map((k) => (grows(k, true) ? undefined : isContainer(k.type) ? num(k.props?.w, 0) || undefined : leafWidth(k)))
-  const used = fixed.reduce<number>((a, b) => a + (b ?? 0), 0) + gap * Math.max(0, kids.length - 1)
-  const flex = fixed.filter((f) => f === undefined).length
-  const each = flex ? Math.max(20, (innerW - used) / flex) : 0
+  const avail = innerW - gap * Math.max(0, kids.length - 1)
+  let used = fixed.reduce<number>((a, b) => a + (b ?? 0), 0)
+  // fixed items that overflow the row are shrunk proportionally (text gets clipped with …)
+  const nonSpacerFlex = kids.filter((k, i) => fixed[i] === undefined && k.type !== 'spacer').length
+  if (used > avail - nonSpacerFlex * 40 && used > 0) {
+    const k = Math.max(0.2, (avail - nonSpacerFlex * 40) / used)
+    for (let i = 0; i < fixed.length; i++) if (fixed[i] !== undefined) fixed[i] = fixed[i]! * k
+    used = fixed.reduce<number>((a, b) => a + (b ?? 0), 0)
+  }
+  // spacers take leftover space only after real flexible items get theirs
+  const rest = Math.max(0, avail - used)
+  if (nonSpacerFlex > 0) {
+    const each = Math.max(20, rest / nonSpacerFlex)
+    return kids.map((k, i) => fixed[i] ?? (k.type === 'spacer' ? 0 : each))
+  }
+  const spacers = fixed.filter((f) => f === undefined).length
+  const each = spacers ? rest / spacers : 0
   return fixed.map((f) => f ?? each)
 }
 

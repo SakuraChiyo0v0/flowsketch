@@ -7,7 +7,7 @@ import { checkProject, type Issue } from '../model/check'
 import { applyPatch, describeOp } from '../model/patch'
 import type { ChatMessage } from '../model/types'
 import { useProject, useStore } from '../store'
-import { relayout } from '../flow/FlowCanvas'
+import { relayout } from '../flow/autoLayout'
 
 function errMsg(e: unknown) {
   if ((e as Error)?.name === 'AbortError') return '已取消'
@@ -19,8 +19,10 @@ function Guide() {
   const busy = useStore((s) => s.busy)
   const showToast = useStore((s) => s.showToast)
   const update = useStore((s) => s.update)
-  const [brief, setBrief] = useState(project.brief)
-  useEffect(() => setBrief(project.brief), [project.id, project.brief])
+  // local draft while typing; null = show the saved brief
+  const [draft, setDraft] = useState<string | null>(null)
+  const brief = draft ?? project.brief
+  const setBrief = setDraft
 
   const run = async (fn: () => Promise<string>) => {
     try {
@@ -29,7 +31,10 @@ function Guide() {
       showToast(errMsg(e))
     }
   }
-  const saveBrief = () => brief !== project.brief && update((p) => ({ ...p, brief }))
+  const saveBrief = () => {
+    if (draft !== null && draft !== project.brief) update((p) => ({ ...p, brief: draft }))
+    setDraft(null)
+  }
 
   return (
     <div className="guide">
@@ -187,8 +192,11 @@ function Chat({ pending, clearPending }: { pending?: string | null; clearPending
     }
   }
 
+  // StrictMode runs effects twice in dev; guard so a pending message is sent once
+  const sentPending = useRef<string | null>(null)
   useEffect(() => {
-    if (pending) {
+    if (pending && sentPending.current !== pending) {
+      sentPending.current = pending
       clearPending?.()
       send(pending)
     }
@@ -315,7 +323,7 @@ export function AiPanel() {
         </div>
       )}
       <div className="ai-body">
-        {tab === 'guide' && <Guide />}
+        {tab === 'guide' && <Guide key={project.id} />}
         {tab === 'chat' && <Chat pending={pending} clearPending={() => setPending(null)} />}
         {tab === 'check' && (
           <LogicCheck

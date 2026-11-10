@@ -1,5 +1,6 @@
 import ELK from 'elkjs/lib/elk.bundled.js'
 import type { Project } from '../model/types'
+import { useStore } from '../store'
 
 const elk = new ELK()
 
@@ -47,4 +48,11 @@ export async function autoLayout(p: Project): Promise<Record<string, { x: number
   const out: Record<string, { x: number; y: number }> = {}
   for (const c of res.children ?? []) out[c.id] = { x: c.x ?? 0, y: c.y ?? 0 }
   return out
+}
+
+/** Re-run auto layout for the whole graph (one undoable step). */
+export async function relayout() {
+  const st = useStore.getState()
+  const pos = await autoLayout(st.project())
+  st.update((p) => ({ ...p, positions: pos }))
 }

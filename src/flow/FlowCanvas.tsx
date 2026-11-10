@@ -238,10 +238,3 @@ export function FlowCanvas() {
     </ReactFlowProvider>
   )
 }
-
-/** Re-run auto layout for the whole graph. */
-export async function relayout() {
-  const st = useStore.getState()
-  const pos = await autoLayout(st.project())
-  st.update((p) => ({ ...p, positions: pos }))
-}

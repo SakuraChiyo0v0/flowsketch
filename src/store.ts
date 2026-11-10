@@ -236,6 +236,8 @@ export const useStore = create<State>((set, get) => ({
   },
 }))
 
+if (import.meta.env.DEV) (window as unknown as { __fs: typeof useStore }).__fs = useStore
+
 export function useProject() {
   return useStore((s) => s.projects[s.currentId])
 }

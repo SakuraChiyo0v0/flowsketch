@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { relayout } from '../flow/FlowCanvas'
+import { relayout } from '../flow/autoLayout'
 import { exportFlow, exportJson, exportPages, exportSpec } from '../export/exporters'
 import type { Project } from '../model/types'
 import { useProject, useStore } from '../store'
@@ -226,8 +226,8 @@ export function TopBar() {
       <Menu label="导出 ▾">
         {(close) => (
           <>
-            <button className="menu-item" onClick={() => (doExport(() => exportFlow(project, 'svg')), close())}>流程图 SVG</button>
-            <button className="menu-item" onClick={() => (doExport(() => exportFlow(project, 'png')), close())}>流程图 PNG</button>
+            <button className="menu-item" onClick={() => (doExport(() => exportFlow(project, 'svg', useStore.getState().showSelf)), close())}>流程图 SVG</button>
+            <button className="menu-item" onClick={() => (doExport(() => exportFlow(project, 'png', useStore.getState().showSelf)), close())}>流程图 PNG</button>
             <button className="menu-item" onClick={() => (doExport(() => exportPages(project, 'svg')), close())}>全部页面线框 SVG</button>
             <button className="menu-item" onClick={() => (doExport(() => exportPages(project, 'png')), close())}>全部页面线框 PNG</button>
             <div className="menu-sep" />

@@ -116,20 +116,22 @@ export function checkProject(p: Project): Issue[] {
         aiFix: `「${s.name}」(id: ${s.id}) 没有出口，请补充返回或继续的连线。`,
       })
     }
-    // states defined but never entered
+    // states defined but never entered (one grouped hint per screen)
+    const orphans = s.states.filter(
+      (st) => st.id !== DEFAULT_STATE && !p.transitions.some((t) => t.to === s.id && t.toState === st.id),
+    )
+    if (orphans.length) {
+      issues.push({
+        id: `state-orphan-${s.id}`,
+        level: 'info',
+        title: `「${s.name}」有 ${orphans.length} 个状态没有进入条件`,
+        detail: `${orphans.map((o) => o.name).join('、')}：流程里没有说明什么情况下会出现。`,
+        targetId: s.id,
+        aiFix: `「${s.name}」(id: ${s.id}) 的状态 ${orphans.map((o) => `「${o.name}」(stateId: ${o.id})`).join('、')} 没有进入它们的连线，请补充触发条件（同页切换用 setState，或通过判断节点）。`,
+      })
+    }
     for (const st of s.states) {
       if (st.id === DEFAULT_STATE) continue
-      const entered = p.transitions.some((t) => t.to === s.id && t.toState === st.id) || p.transitions.some((t) => t.from === s.id && t.action === 'setState' && t.toState === st.id)
-      if (!entered) {
-        issues.push({
-          id: `state-orphan-${s.id}-${st.id}`,
-          level: 'info',
-          title: `状态「${s.name} · ${st.name}」没有进入条件`,
-          detail: '定义了这个状态，但流程里没有说明什么情况下会出现它。',
-          targetId: s.id,
-          aiFix: `「${s.name}」的状态「${st.name}」(stateId: ${st.id}) 没有进入它的连线，请补充触发条件（可以通过判断节点）。`,
-        })
-      }
       // error states should have a way out
       const leaves = p.transitions.some((t) => t.from === s.id && t.fromState === st.id)
       if (/失败|错误|error|fail/i.test(st.name + st.id) && !leaves) {

@@ -263,6 +263,8 @@ input, textarea, select { font: inherit; color: inherit; }
 .hit.linked { border: 1px dashed rgba(37, 99, 235, 0.55); }
 .hit.linked.sel { border: 2px solid var(--accent); }
 .hit.drop { background: rgba(37, 99, 235, 0.12); border-color: var(--accent); }
+.link-badge { display: none; }
+.hit:hover > .link-badge, .hit.sel > .link-badge { display: block; z-index: 50; }
 .link-badge { position: absolute; right: -2px; top: -9px; transform: translateY(-50%); background: var(--accent); color: #fff; font-size: 10px; border-radius: 4px; padding: 0 5px; white-space: nowrap; pointer-events: none; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
 .empty-hint { display: grid; place-items: center; height: 100%; color: var(--mid); }
 

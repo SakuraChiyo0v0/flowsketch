@@ -23,7 +23,7 @@ function safe(s: string) {
 }
 
 /** Whole flow diagram as one SVG (thumbnails + edges), matching the canvas layout. */
-export function flowSvg(p: Project): string {
+export function flowSvg(p: Project, opts: { showSelf?: boolean } = {}): string {
   const ids = [...p.screens.map((s) => s.id), ...p.conditions.map((c) => c.id)]
   if (!ids.length) return '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80"/>'
   const pos = (id: string) => p.positions[id] ?? { x: 0, y: 0 }
@@ -62,6 +62,7 @@ export function flowSvg(p: Project): string {
   const label = (t: Transition) => [t.branch, t.label].filter(Boolean).join(' · ') || (t.action === 'close' ? '关闭' : t.action === 'back' ? '返回' : '')
   for (const t of p.transitions) {
     if (!ids.includes(t.from) || !ids.includes(t.to)) continue
+    if (t.from === t.to && !opts.showSelf) continue
     const a = anchor(t.from, 'out')
     const b = anchor(t.to, 'in')
     const col = EDGE[t.kind]
@@ -188,8 +189,8 @@ export function exportJson(p: Project) {
   download(`${safe(p.name)}.flowsketch.json`, JSON.stringify(p, null, 2), 'application/json')
 }
 
-export async function exportFlow(p: Project, fmt: 'svg' | 'png') {
-  const svg = flowSvg(p)
+export async function exportFlow(p: Project, fmt: 'svg' | 'png', showSelf = false) {
+  const svg = flowSvg(p, { showSelf })
   if (fmt === 'svg') download(`${safe(p.name)}-流程图.svg`, svg, 'image/svg+xml')
   else download(`${safe(p.name)}-流程图.png`, await svgToPng(svg))
 }
