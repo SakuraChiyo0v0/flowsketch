@@ -46,7 +46,10 @@ export function PageEditor() {
   if (!screen || !state || !painted) return <div className="empty-hint">在左侧选择一个页面</div>
 
   const outgoing = project.transitions.filter((t) => t.from === screen.id && (t.fromState ?? DEFAULT_STATE) === state.id)
-  const incoming = project.transitions.filter((t) => t.to === screen.id)
+  // "from here": real entries first; back edges (someone returning here) collapse into one line
+  const incomingAll = project.transitions.filter((t) => t.to === screen.id && t.from !== screen.id)
+  const backIns = incomingAll.filter((t) => t.kind === 'back')
+  const incoming = incomingAll.filter((t) => t.kind !== 'back')
   const byElement = new Map<string, Transition[]>()
   for (const t of outgoing) if (t.elementId) byElement.set(t.elementId, [...(byElement.get(t.elementId) ?? []), t])
   const nodeName = (id: string) => project.screens.find((s) => s.id === id)?.name ?? project.conditions.find((c) => c.id === id)?.label ?? id
@@ -144,13 +147,20 @@ export function PageEditor() {
       <div className="page-stage" ref={stageRef}>
         <div className="io-col">
           <div className="io-title">从这里进入</div>
-          {incoming.length === 0 && <div className="io-none">{screen.id === project.entryId ? '入口页' : '无'}</div>}
+          {screen.id === project.entryId && <div className="io-none">▶ 入口页</div>}
+          {incoming.length === 0 && screen.id !== project.entryId && <div className="io-none">无</div>}
           {incoming.map((t) => (
             <button key={t.id} className={`io-item ${t.kind}`} onClick={(e) => (e.stopPropagation(), project.screens.some((s) => s.id === t.from) && openScreen(t.from, t.fromState))}>
               <span className="io-node">{nodeName(t.from)}</span>
               <span className="io-label">{[t.branch, t.label].filter(Boolean).join(' · ') || t.action}{t.toState && t.toState !== state.id ? ` →[${screen.states.find((x) => x.id === t.toState)?.name}]` : ''}</span>
             </button>
           ))}
+          {backIns.length > 0 && (
+            <div className="io-back" title={backIns.map((t) => nodeName(t.from)).join('、')}>
+              ↩ 从 {[...new Set(backIns.map((t) => nodeName(t.from)))].slice(0, 3).join('、')}
+              {new Set(backIns.map((t) => t.from)).size > 3 ? ` 等 ${new Set(backIns.map((t) => t.from)).size} 处` : ''}返回
+            </div>
+          )}
         </div>
 
         <div className={`device-wrap ${screen.kind === 'overlay' ? `ov-${screen.overlayType}` : ''}`}>

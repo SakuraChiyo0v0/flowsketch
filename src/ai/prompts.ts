@@ -264,13 +264,23 @@ function bindElements(p: Project, screenId: string, layoutOps: PatchOp[]): Patch
     const want = norm(t.label)
     if (!want) continue
     let best: { id: string; score: number } | undefined
+    // the model's own element ids often name the action ("open-show-1", "expand-player"):
+    // match on target screen id and on label/id words as well as exact label text
+    const target = p.screens.find((s) => s.id === t.to)
+    const words = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2)
+    const toWords = new Set([...words(t.to), ...words(target?.name ?? '')])
     const visit = (e: Record<string, unknown>) => {
       const props = (e.props ?? {}) as Record<string, unknown>
       const id = (e.id ?? props.id) as string | undefined
       const label = String(e.label ?? props.label ?? '')
-      if (id && label && ['button', 'listItem', 'icon', 'card', 'input', 'search', 'avatar', 'select', 'toggle', 'checkbox', 'image'].includes(String(e.type))) {
+      if (id && ['button', 'listItem', 'icon', 'card', 'input', 'search', 'avatar', 'select', 'toggle', 'checkbox', 'image'].includes(String(e.type))) {
         const l = norm(label)
-        const score = l === want ? 3 : l.includes(want) || want.includes(l) ? 2 : 0
+        let score = l && (l === want ? 4 : l.includes(want) || want.includes(l) ? 3 : 0)
+        if (!score) {
+          const idw = words(id)
+          // id mentions the target screen (e.g. "open-show-…" → show-detail)
+          if (idw.some((w) => toWords.has(w) || [...toWords].some((tw) => tw.startsWith(w) || w.startsWith(tw)))) score = 1
+        }
         if (score && (!best || score > best.score)) best = { id, score }
       }
       for (const c of (e.children as Record<string, unknown>[] | undefined) ?? []) visit(c)

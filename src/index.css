@@ -285,3 +285,4 @@ input, textarea, select { font: inherit; color: inherit; }
 .ce-features { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 520px; margin: 6px auto 0; }
 .ce-features .chip { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); }
 .ce-desc.small { font-size: 12px; }
+.io-back { font-size: 11px; color: var(--mid); padding: 4px 8px; line-height: 1.5; }
