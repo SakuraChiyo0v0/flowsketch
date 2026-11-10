@@ -54,6 +54,34 @@ function useShortcuts() {
   }, [])
 }
 
+function EmptyCanvas() {
+  const busy = useStore((s) => s.busy)
+  const features = useStore((s) => s.projects[s.currentId].features)
+  if (busy)
+    return (
+      <div className="center-empty">
+        <div className="ce-title">
+          <span className="spin" /> AI 正在生成
+        </div>
+        <div className="ce-desc">{busy}</div>
+        {features.length > 0 && (
+          <div className="ce-features">
+            {features.map((f) => (
+              <span key={f.id} className="chip">{f.name}</span>
+            ))}
+          </div>
+        )}
+        <div className="ce-desc small">每一步通常需要 30 秒到 2 分钟。生成完的部分会立刻出现在这里。</div>
+      </div>
+    )
+  return (
+    <div className="center-empty">
+      <div className="ce-title">从一句话开始</div>
+      <div className="ce-desc">在右侧「引导生成」里描述你的软件，AI 会一步步生成功能、页面结构、交互流程和线框。也可以用左上角工具栏手动添加页面。</div>
+    </div>
+  )
+}
+
 function FlowToolbar() {
   const showSelf = useStore((s) => s.showSelf)
   const setShowSelf = useStore((s) => s.setShowSelf)
@@ -104,12 +132,7 @@ export default function App() {
             <>
               <FlowCanvas />
               <FlowToolbar />
-              {empty && (
-                <div className="center-empty">
-                  <div className="ce-title">从一句话开始</div>
-                  <div className="ce-desc">在右侧「引导生成」里描述你的软件，AI 会一步步生成功能、页面结构、交互流程和线框。也可以用左上角工具栏手动添加页面。</div>
-                </div>
-              )}
+              {empty && <EmptyCanvas />}
             </>
           ) : (
             <PageEditor />

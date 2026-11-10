@@ -187,3 +187,26 @@ describe('web layout', () => {
     for (const b of btns) expect(b.w).toBeGreaterThanOrEqual(textWidthOf(b.el.label!) + 32)
   })
 })
+
+describe('normalizeElement tolerance', () => {
+  it('accepts id/label inside props and props at top level', () => {
+    const el = normalizeElement({ type: 'button', variant: 'secondary', props: { id: 'save-btn', label: '保存', size: 'sm' } })
+    expect(el.id).toBe('save-btn')
+    expect(el.label).toBe('保存')
+    expect(el.props).toEqual({ variant: 'secondary', size: 'sm' })
+  })
+})
+
+describe('layout binding', () => {
+  it('binds unbound transitions to elements with matching labels', async () => {
+    const { layoutToOps } = await import('../ai/prompts')
+    let p = applyPatch(blankProject(), [
+      { op: 'addScreen', screen: { id: 'a', name: 'A' } },
+      { op: 'addScreen', screen: { id: 'b', name: 'B' } },
+      { op: 'addTransition', transition: { from: 'a', to: 'b', label: '下一步' } },
+    ]).project
+    const ops = layoutToOps({ states: { default: { type: 'column', children: [{ type: 'button', label: '下一步', props: { id: 'next' } }] } } }, 'a', ['default'], p)
+    p = applyPatch(p, ops).project
+    expect(p.transitions[0].elementId).toBe('next')
+  })
+})

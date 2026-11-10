@@ -112,19 +112,27 @@ export function normalizeElement(raw: unknown, library: ComponentDef[] = [], see
     grid: 'table', datagrid: 'table',
   }
   if (!(type in ELEMENT_META)) type = aliases[type.toLowerCase()] ?? 'text'
-  let id = typeof o.id === 'string' && o.id ? o.id : nanoid(8)
+  const rawProps = o.props && typeof o.props === 'object' ? (o.props as Record<string, unknown>) : {}
+  // models sometimes put id/label inside props; accept them there too
+  const wantId = typeof o.id === 'string' && o.id ? o.id : typeof rawProps.id === 'string' && rawProps.id ? rawProps.id : undefined
+  let id = wantId ?? nanoid(8)
   if (seen.has(id)) id = nanoid(8)
   seen.add(id)
   const el: WElement = { id, type }
-  if (o.label != null && o.label !== '') el.label = String(o.label)
-  if (o.props && typeof o.props === 'object') {
-    const props: Record<string, PropValue> = {}
-    for (const [k, v] of Object.entries(o.props as Record<string, unknown>)) {
-      if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') props[k] = v
-      else if (Array.isArray(v)) props[k] = v.map(String).join(',')
-    }
-    if (Object.keys(props).length) el.props = props
+  const label = o.label ?? o.text ?? rawProps.label ?? rawProps.text
+  if (label != null && label !== '') el.label = String(label)
+  const props: Record<string, PropValue> = {}
+  for (const [k, v] of Object.entries(rawProps)) {
+    if (k === 'id' || k === 'label' || (k === 'text' && type !== 'text')) continue
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') props[k] = v
+    else if (Array.isArray(v)) props[k] = v.map(String).join(',')
   }
+  // top-level props the model put next to type (e.g. {"type":"button","variant":"primary"})
+  for (const [k, v] of Object.entries(o)) {
+    if (['id', 'type', 'label', 'text', 'props', 'children', 'component', 'name', 'ref', 'labels'].includes(k) || k in props) continue
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') props[k] = v
+  }
+  if (Object.keys(props).length) el.props = props
   if (isContainer(type)) {
     const kids = Array.isArray(o.children) && depth < 12 ? o.children : []
     el.children = kids.map((c) => normalizeElement(c, library, seen, depth + 1))

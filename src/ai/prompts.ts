@@ -222,7 +222,7 @@ export function layoutPrompt(p: Project, screenId: string, stateIds?: string[]) 
 
 第 4 步：为「${s.name}」(${s.kind === 'overlay' ? `浮层 ${s.overlayType}` : DEVICES[p.device].hint}) 生成低保真线框布局。
 ${s.description ? `页面说明：${s.description}\n` : ''}需要生成的状态：${states.map((st) => `${st.id}(${st.name})`).join('、')}
-这个页面上的交互（布局里要有对应元素）：
+这个页面上的交互（布局里要有对应元素，文字和交互说明保持一致；可点击的元素都给一个简短的英文 id，如 "save-btn"）：
 ${outgoing.length ? outgoing.join('\n') : '（暂无）'}
 
 ${LAYOUT_RULES}${elementDoc()}
@@ -235,7 +235,7 @@ ${libraryDoc(p)}
   ]
 }
 
-export function layoutToOps(v: unknown, screenId: string, allowed: string[]): PatchOp[] {
+export function layoutToOps(v: unknown, screenId: string, allowed: string[], p?: Project): PatchOp[] {
   const o = v as { states?: Record<string, unknown> }
   const states = o?.states && typeof o.states === 'object' ? o.states : (v as Record<string, unknown>)
   const ops: PatchOp[] = []
@@ -244,7 +244,41 @@ export function layoutToOps(v: unknown, screenId: string, allowed: string[]): Pa
     ops.push({ op: 'setLayout', screenId, stateId, root })
   }
   if (!ops.length) throw new Error(`没有返回任何状态的布局，需要：${allowed.join(', ')}`)
+  if (p) ops.push(...bindElements(p, screenId, ops))
   return ops
+}
+
+/**
+ * After layouts exist, connect transitions that have no elementId to the element that
+ * most likely triggers them (label match), so the page editor shows the link on the element.
+ */
+function bindElements(p: Project, screenId: string, layoutOps: PatchOp[]): PatchOp[] {
+  const out: PatchOp[] = []
+  const rootsByState = new Map<string, unknown>()
+  for (const op of layoutOps) if (op.op === 'setLayout') rootsByState.set(op.stateId, op.root)
+  const norm = (s: string) => s.replace(/[\s「」“”"'()（）…·:：]/g, '').toLowerCase()
+  for (const t of p.transitions) {
+    if (t.from !== screenId || t.elementId || !t.label || t.trigger === 'auto' || t.trigger === 'condition') continue
+    const raw = rootsByState.get(t.fromState ?? DEFAULT_STATE)
+    if (!raw) continue
+    const want = norm(t.label)
+    if (!want) continue
+    let best: { id: string; score: number } | undefined
+    const visit = (e: Record<string, unknown>) => {
+      const props = (e.props ?? {}) as Record<string, unknown>
+      const id = (e.id ?? props.id) as string | undefined
+      const label = String(e.label ?? props.label ?? '')
+      if (id && label && ['button', 'listItem', 'icon', 'card', 'input', 'search', 'avatar', 'select', 'toggle', 'checkbox', 'image'].includes(String(e.type))) {
+        const l = norm(label)
+        const score = l === want ? 3 : l.includes(want) || want.includes(l) ? 2 : 0
+        if (score && (!best || score > best.score)) best = { id, score }
+      }
+      for (const c of (e.children as Record<string, unknown>[] | undefined) ?? []) visit(c)
+    }
+    visit(raw as Record<string, unknown>)
+    if (best) out.push({ op: 'updateTransition', id: t.id, changes: { elementId: best.id } })
+  }
+  return out
 }
 
 // ---- chat: free-form edits ---------------------------------------------------------

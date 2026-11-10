@@ -189,7 +189,14 @@ function paintBox(b: Box): string {
       return lines(x, y, w, Number(p.lines ?? 2))
     case 'button': {
       const v = p.variant ?? 'primary'
-      if (v === 'text') return text(x + w / 2, y + h / 2, label, { size: 14, color: C.ink, anchor: 'middle', weight: 500, maxW: w })
+      if (v === 'text') {
+        const fs = p.size === 'sm' ? 12 : 14
+        const ic = p.icon ? String(p.icon) : ''
+        if (!ic) return text(x + w / 2, y + h / 2, label, { size: fs, color: C.ink, anchor: 'middle', weight: 500, maxW: w })
+        const tw = Math.min(textWidth(label, fs), w - fs - 6)
+        const sx = x + w / 2 - (tw + fs + 6) / 2
+        return icon(ic, sx, y + h / 2 - fs / 2 - 1, fs + 2, C.ink) + text(sx + fs + 6, y + h / 2, label, { size: fs, color: C.ink, weight: 500, maxW: w - fs - 6 })
+      }
       const filled = v === 'primary'
       const danger = v === 'danger'
       const fs = p.size === 'lg' ? 18 : p.size === 'sm' ? 12 : 14

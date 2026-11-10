@@ -79,7 +79,7 @@ export async function runStep(key: StepKey, opts: { screenIds?: string[] } = {})
         try {
           const cur = useStore.getState().project()
           const allowed = cur.screens.find((x) => x.id === s.id)?.states.map((x) => x.id) ?? []
-          const ops = await chatJson(ai, layoutPrompt(cur, s.id), (v) => layoutToOps(v, s.id, allowed), { signal, maxTokens: 12000 })
+          const ops = await chatJson(ai, layoutPrompt(cur, s.id), (v) => layoutToOps(v, s.id, allowed, useStore.getState().project()), { signal, maxTokens: 12000 })
           commit(ops, 3)
           done++
         } catch (e) {
