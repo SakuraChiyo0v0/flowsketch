@@ -22,6 +22,22 @@ export function textWidth(s: string, size = 13) {
   return w
 }
 
+/** Number of lines `s` wraps into at width w (char-level, same rule as the painter). */
+export function wrapCount(s: string, w: number, size: number): number {
+  let n = 0
+  for (const para of s.split(/\n/)) {
+    let line = ''
+    n++
+    for (const ch of para) {
+      if (line && textWidth(line + ch, size) > w) {
+        n++
+        line = ch
+      } else line += ch
+    }
+  }
+  return n
+}
+
 /** Intrinsic height of a leaf at a given width. */
 function leafHeight(el: WElement, w: number): number {
   const p = el.props ?? {}
@@ -32,13 +48,11 @@ function leafHeight(el: WElement, w: number): number {
       return 56
     case 'title': {
       const size = p.size === 'lg' ? 22 : p.size === 'sm' ? 15 : 18
-      const lines = Math.max(1, Math.ceil(textWidth(el.label ?? '', size) / Math.max(40, w)))
-      return lines * (size + 8)
+      return Math.min(3, wrapCount(el.label ?? '', Math.max(40, w), size)) * (size + 8)
     }
     case 'text': {
       if (el.label) {
-        const lines = Math.max(1, Math.ceil(textWidth(el.label, 13) / Math.max(40, w)))
-        return Math.min(lines, 6) * 19
+        return Math.min(6, wrapCount(el.label, Math.max(40, w), 13)) * 19
       }
       return num(p.lines, 2) * 14
     }
@@ -72,6 +86,36 @@ function leafHeight(el: WElement, w: number): number {
       return 36 + num(p.rows, 4) * 34
     case 'chart':
       return num(p.h, 160)
+    case 'select':
+      return 38
+    case 'radio': {
+      const n = String(p.items ?? '').split(/[,，]/).filter(Boolean).length || 2
+      return p.dir === 'column' ? n * 30 : 30
+    }
+    case 'slider':
+      return el.label ? 44 : 24
+    case 'progress':
+      return el.label ? 34 : 10
+    case 'stepper':
+      return 52
+    case 'pagination':
+      return 34
+    case 'breadcrumb':
+      return 22
+    case 'titlebar':
+      return 32
+    case 'menubar':
+      return 28
+    case 'toolbar':
+      return p.labels ? 52 : 38
+    case 'tree': {
+      const n = String(p.items ?? '').split(/[,，]/).filter(Boolean).length || 4
+      return num(p.h, n * 26 + 8)
+    }
+    case 'statusbar':
+      return 24
+    case 'splitter':
+      return 6
     default:
       return 24
   }
@@ -99,6 +143,14 @@ function leafWidth(el: WElement): number | undefined {
     case 'toggle':
     case 'checkbox':
       return undefined
+    case 'splitter':
+      return 6
+    case 'pagination':
+      return Math.min(9, num(p.pages, 5)) * 34 + 64
+    case 'breadcrumb':
+      return String(p.items ?? '').split(/[,，]/).reduce((a, s) => a + textWidth(s.trim(), 12) + 22, 0)
+    case 'select':
+      return num(p.w, 0) || undefined
     case 'image':
       return p.w != null ? num(p.w, 80) : undefined
     default:
@@ -193,9 +245,11 @@ function place(el: WElement, x: number, y: number, w: number, h: number, depth: 
     else if (align === 'end') cx = ix + Math.max(0, iw - total)
     else if (align === 'between' && kids.length > 1) g = gap + Math.max(0, (iw - total) / (kids.length - 1))
     kids.forEach((k, i) => {
-      const kh = isContainer(k.type) ? Math.max(measure(k, widths[i]), ih) : measure(k, widths[i])
-      const ky = iy + (isContainer(k.type) ? 0 : Math.max(0, (ih - kh) / 2))
-      place(k, cx, ky, widths[i], isContainer(k.type) ? ih : kh, depth + 1, out)
+      // containers, splitters and vertical-fill leaves (tree) stretch to the row height
+      const stretch = isContainer(k.type) || k.type === 'splitter' || (k.type === 'tree' && k.props?.h == null)
+      const kh = stretch ? Math.max(isContainer(k.type) ? measure(k, widths[i]) : 0, ih) : measure(k, widths[i])
+      const ky = iy + (stretch ? 0 : Math.max(0, (ih - kh) / 2))
+      place(k, cx, ky, widths[i], stretch ? ih : kh, depth + 1, out)
       cx += widths[i] + g
     })
     return

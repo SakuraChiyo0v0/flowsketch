@@ -255,6 +255,35 @@ const PROP_FIELDS: Partial<Record<WElement['type'], { key: string; label: string
     { key: 'cols', label: '列名', kind: 'text' },
     { key: 'rows', label: '行数', kind: 'num' },
   ],
+  radio: [
+    { key: 'items', label: '选项', kind: 'text' },
+    { key: 'active', label: '选中', kind: 'num' },
+    { key: 'dir', label: '排列', kind: 'select', options: ['row', 'column'] },
+  ],
+  slider: [{ key: 'value', label: '数值', kind: 'num' }],
+  progress: [{ key: 'value', label: '进度', kind: 'num' }],
+  stepper: [
+    { key: 'items', label: '步骤', kind: 'text' },
+    { key: 'active', label: '当前', kind: 'num' },
+  ],
+  pagination: [
+    { key: 'pages', label: '页数', kind: 'num' },
+    { key: 'active', label: '当前', kind: 'num' },
+  ],
+  breadcrumb: [{ key: 'items', label: '路径', kind: 'text' }],
+  titlebar: [{ key: 'os', label: '系统', kind: 'select', options: ['win', 'mac'] }],
+  menubar: [{ key: 'items', label: '菜单', kind: 'text' }],
+  toolbar: [
+    { key: 'items', label: '图标(逗号, | 分隔)', kind: 'text' },
+    { key: 'labels', label: '显示文字', kind: 'bool' },
+  ],
+  tree: [
+    { key: 'items', label: '节点(> 表示层级)', kind: 'text' },
+    { key: 'active', label: '选中', kind: 'num' },
+    { key: 'h', label: '固定高度', kind: 'num' },
+  ],
+  statusbar: [{ key: 'items', label: '内容', kind: 'text' }],
+  select: [{ key: 'w', label: '宽度(行内)', kind: 'num' }],
   chart: [
     { key: 'kind', label: '类型', kind: 'select', options: ['bar', 'line', 'pie'] },
     { key: 'h', label: '高度', kind: 'num' },
@@ -297,7 +326,7 @@ function ElementProps({ el, screen, stateId }: { el: WElement; screen: Screen; s
   return (
     <div className="insp-body">
       <div className="insp-kind">{isRoot ? '页面根容器' : ELEMENT_META[el.type].name}</div>
-      {!isRoot && el.type !== 'divider' && el.type !== 'spacer' && el.type !== 'column' && el.type !== 'row' && (
+      {!isRoot && !['divider', 'spacer', 'column', 'row', 'splitter', 'radio', 'stepper', 'pagination', 'breadcrumb', 'menubar', 'toolbar', 'tree', 'statusbar', 'tabbar', 'tabs', 'table', 'chart'].includes(el.type) && (
         <Field label={el.type === 'icon' ? '图标' : '文字'}>
           {el.type === 'icon' ? (
             <select value={el.label ?? ''} onChange={(e) => setEl((x) => ({ ...x, label: e.target.value }))}>

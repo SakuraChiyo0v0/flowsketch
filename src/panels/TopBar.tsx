@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { relayout } from '../flow/autoLayout'
 import { exportFlow, exportJson, exportPages, exportSpec } from '../export/exporters'
 import type { Project } from '../model/types'
+import { DEVICE_KINDS, DEVICES } from '../model/types'
 import { useProject, useStore } from '../store'
 
 function Menu({ label, children }: { label: React.ReactNode; children: (close: () => void) => React.ReactNode }) {
@@ -104,9 +105,9 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
           <textarea rows={4} value={brief} placeholder="例如：面向小区居民的二手物品交换平台，可以发布物品、私信沟通、约定线下交换" onChange={(e) => setBrief(e.target.value)} />
         </label>
         <div className="seg small">
-          {(['mobile', 'web'] as const).map((d) => (
+          {DEVICE_KINDS.map((d) => (
             <button key={d} className={device === d ? 'on' : ''} onClick={() => setDevice(d)}>
-              {d === 'mobile' ? '移动 App' : 'Web 应用'}
+              {DEVICES[d].name}
             </button>
           ))}
         </div>

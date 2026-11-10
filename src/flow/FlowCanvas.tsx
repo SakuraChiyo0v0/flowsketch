@@ -45,6 +45,13 @@ function FlowEdge(props: EdgeProps & { data: EdgeData }) {
     path = `M ${sourceX} ${sourceY} C ${sourceX + r * 2} ${sourceY - r * 3}, ${targetX - r * 2} ${targetY - r * 3}, ${targetX} ${targetY}`
     lx = (sourceX + targetX) / 2
     ly = sourceY - r * 2.3
+  } else if (targetX < sourceX - 40) {
+    // backward edge (target is left of source): route it below both nodes instead of
+    // slicing diagonally across the graph
+    const drop = Math.max(sourceY, targetY) + 80 + Math.min(220, Math.abs(sourceX - targetX) * 0.08)
+    path = `M ${sourceX} ${sourceY} C ${sourceX + 80} ${sourceY}, ${sourceX + 80} ${drop}, ${sourceX} ${drop} L ${targetX} ${drop} C ${targetX - 80} ${drop}, ${targetX - 80} ${targetY}, ${targetX} ${targetY}`
+    lx = (sourceX + targetX) / 2
+    ly = drop
   } else {
     ;[path, lx, ly] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, curvature: 0.35 })
   }
@@ -53,8 +60,8 @@ function FlowEdge(props: EdgeProps & { data: EdgeData }) {
       <BaseEdge id={id} path={path} markerEnd={markerEnd} style={{ stroke: color, strokeWidth: selected ? 2.6 : 1.6, strokeDasharray: t.kind === 'normal' ? undefined : '6 4' }} />
       {data.text && (
         <EdgeLabelRenderer>
-          <div className={`elabel ${t.kind} ${selected ? 'sel' : ''}`} style={{ transform: `translate(-50%, -50%) translate(${lx}px,${ly}px)` }}>
-            {data.text}
+          <div className={`elabel ${t.kind} ${selected ? 'sel' : ''}`} title={data.text} style={{ transform: `translate(-50%, -50%) translate(${lx}px,${ly}px)` }}>
+            {selected || data.text.length <= 12 ? data.text : data.text.slice(0, 11) + '…'}
           </div>
         </EdgeLabelRenderer>
       )}

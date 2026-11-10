@@ -34,6 +34,19 @@ export const ELEMENT_META: Record<ElementType, ElementMeta> = {
   spacer: { type: 'spacer', name: '弹性空白', container: false, defaults: {}, hint: '占满剩余空间，用于把元素推到底部' },
   table: { type: 'table', name: '表格', container: false, defaults: { props: { cols: '名称,状态,时间', rows: 4 } }, hint: 'props.cols 逗号分隔列名，props.rows 行数' },
   chart: { type: 'chart', name: '图表', container: false, defaults: { props: { kind: 'bar', h: 160 } }, hint: 'props.kind: bar|line|pie，props.h' },
+  select: { type: 'select', name: '下拉选择', container: false, defaults: { label: '请选择' }, hint: 'label=当前值或占位文字' },
+  radio: { type: 'radio', name: '单选组', container: false, defaults: { props: { items: '选项一,选项二', active: 0 } }, hint: 'props.items 逗号分隔，props.active 选中下标，props.dir: row|column' },
+  slider: { type: 'slider', name: '滑块', container: false, defaults: { label: '音量', props: { value: 60 } }, hint: 'label=说明；props.value 0-100' },
+  progress: { type: 'progress', name: '进度条', container: false, defaults: { props: { value: 40 } }, hint: 'props.value 0-100；label 可选说明' },
+  stepper: { type: 'stepper', name: '步骤条', container: false, defaults: { props: { items: '填写信息,确认,完成', active: 0 } }, hint: '多步流程指示；props.items, props.active' },
+  pagination: { type: 'pagination', name: '分页', container: false, defaults: { props: { pages: 5, active: 0 } }, hint: 'props.pages 页数，props.active' },
+  breadcrumb: { type: 'breadcrumb', name: '面包屑', container: false, defaults: { props: { items: '首页,列表,详情' } }, hint: 'props.items 逗号分隔' },
+  titlebar: { type: 'titlebar', name: '窗口标题栏', container: false, defaults: { label: '应用名称' }, hint: '桌面应用窗口最顶部：label=窗口标题；props.os: win|mac' },
+  menubar: { type: 'menubar', name: '菜单栏', container: false, defaults: { props: { items: '文件,编辑,视图,帮助' } }, hint: '桌面应用菜单栏；props.items 逗号分隔' },
+  toolbar: { type: 'toolbar', name: '工具栏', container: false, defaults: { props: { items: 'plus,edit,trash,|,search,settings' } }, hint: '桌面应用图标工具栏；props.items 为图标名逗号分隔，| 表示分隔线；props.labels=true 显示文字' },
+  tree: { type: 'tree', name: '树形目录', container: false, defaults: { props: { items: '文档,>项目 A,>>需求.md,>项目 B,图片', active: 1 } }, hint: '文件夹/目录树；props.items 逗号分隔，前缀 > 表示层级；props.active 选中下标；常放在侧边栏，配合 grow 占满高度' },
+  statusbar: { type: 'statusbar', name: '状态栏', container: false, defaults: { props: { items: '就绪,第 1 行,UTF-8' } }, hint: '桌面应用窗口最底部；props.items 逗号分隔' },
+  splitter: { type: 'splitter', name: '分栏线', container: false, defaults: {}, hint: '放在 row 里两栏之间的竖向可拖动分隔线' },
 }
 
 export const ELEMENT_TYPES = Object.keys(ELEMENT_META) as ElementType[]
@@ -83,6 +96,11 @@ export function normalizeElement(raw: unknown, library: ComponentDef[] = [], see
     list: 'column', label: 'text', paragraph: 'text', heading: 'title', h1: 'title', img: 'image',
     textfield: 'input', textarea: 'input', switch: 'toggle', topbar: 'header', appbar: 'header',
     navbar: 'nav', bottomnav: 'tabbar', tabbar: 'tabbar', separator: 'divider', link: 'button',
+    dropdown: 'select', combobox: 'select', picker: 'select', radiogroup: 'radio', range: 'slider',
+    progressbar: 'progress', steps: 'stepper', pager: 'pagination', crumbs: 'breadcrumb',
+    windowtitle: 'titlebar', titlebar: 'titlebar', menu: 'menubar', menubar: 'menubar', toolbar: 'toolbar',
+    treeview: 'tree', filetree: 'tree', outline: 'tree', status: 'statusbar', footer: 'statusbar', resizer: 'splitter',
+    grid: 'table', datagrid: 'table',
   }
   if (!(type in ELEMENT_META)) type = aliases[type.toLowerCase()] ?? 'text'
   let id = typeof o.id === 'string' && o.id ? o.id : nanoid(8)
@@ -181,7 +199,7 @@ export function isDescendant(root: WElement, ancestorId: string, id: string): bo
 export function interactiveElements(root: WElement): WElement[] {
   const out: WElement[] = []
   walk(root, (el) => {
-    if (['button', 'listItem', 'icon', 'card', 'input', 'search', 'tabbar', 'tabs', 'avatar', 'image', 'header', 'nav', 'toggle', 'checkbox'].includes(el.type)) out.push(el)
+    if (['button', 'listItem', 'icon', 'card', 'input', 'search', 'tabbar', 'tabs', 'avatar', 'image', 'header', 'nav', 'toggle', 'checkbox', 'select', 'radio', 'menubar', 'toolbar', 'tree', 'pagination', 'breadcrumb', 'table'].includes(el.type)) out.push(el)
   })
   return out
 }

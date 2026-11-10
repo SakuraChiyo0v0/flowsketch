@@ -37,6 +37,33 @@ function text(x: number, y: number, s: string, opt: { size?: number; color?: str
   return `<text x="${x}" y="${y}" font-size="${size}" fill="${opt.color ?? C.ink}" ${FONT}${opt.weight ? ` font-weight="${opt.weight}"` : ''}${opt.anchor ? ` text-anchor="${opt.anchor}"` : ''} dominant-baseline="middle">${esc(str)}</text>`
 }
 
+/** Break text into lines that fit maxW (char-level, works for CJK and latin). */
+export function wrapLines(s: string, maxW: number, size: number, maxLines: number): string[] {
+  const out: string[] = []
+  for (const para of s.split('\n')) {
+    let line = ''
+    for (const ch of para) {
+      if (line && textWidth(line + ch, size) > maxW) {
+        out.push(line)
+        line = ch.trimStart()
+      } else line += ch
+    }
+    out.push(line)
+  }
+  if (out.length > maxLines) {
+    const kept = out.slice(0, maxLines)
+    kept[maxLines - 1] = clip(kept[maxLines - 1] + '…', maxW, size)
+    return kept
+  }
+  return out
+}
+
+function para(x: number, y: number, s: string, opt: { size: number; color?: string; weight?: number; lineH: number; maxW: number; maxLines: number }) {
+  return wrapLines(s, opt.maxW, opt.size, opt.maxLines)
+    .map((ln, i) => text(x, y + opt.lineH / 2 + i * opt.lineH, ln, { size: opt.size, color: opt.color, weight: opt.weight }))
+    .join('')
+}
+
 function rect(x: number, y: number, w: number, h: number, opt: { fill?: string; stroke?: string; r?: number; dash?: boolean; sw?: number } = {}) {
   return `<rect x="${x}" y="${y}" width="${Math.max(0, w)}" height="${Math.max(0, h)}" rx="${opt.r ?? 0}" fill="${opt.fill ?? 'none'}"${opt.stroke ? ` stroke="${opt.stroke}" stroke-width="${opt.sw ?? 1}"` : ''}${opt.dash ? ' stroke-dasharray="4 3"' : ''}/>`
 }
@@ -85,6 +112,23 @@ const ICONS: Record<string, string> = {
   grid: 'M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 0h7v7h-7z',
   list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
   sparkle: 'M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z',
+  folder: 'M3 6h6l2 2h10v11H3z',
+  download: 'M12 4v11m-5-5l5 5 5-5M4 20h16',
+  upload: 'M12 20V9m-5 5l5-5 5 5M4 4h16',
+  refresh: 'M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5',
+  copy: 'M8 8h12v12H8zM4 16V4h12',
+  save: 'M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6',
+  undo: 'M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3',
+  redo: 'M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3',
+  eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+  link: 'M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1m2 4a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1',
+  bold: 'M7 4h6a4 4 0 0 1 0 8H7zm0 8h7a4 4 0 0 1 0 8H7z',
+  info: 'M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18zm0 8v5m0-8h.01',
+  warning: 'M12 3l10 18H2zm0 7v4m0 3h.01',
+  cloud: 'M7 18a5 5 0 0 1 0-10 6 6 0 0 1 11 2 4 4 0 0 1 0 8z',
+  terminal: 'M4 5h16v14H4zm3 4l3 3-3 3m5 0h5',
+  sidebar: 'M4 5h16v14H4zm5 0v14',
+  pin: 'M9 3h6l-1 6 4 4H6l4-4zM12 13v8',
 }
 
 export function iconNames() {
@@ -138,10 +182,10 @@ function paintBox(b: Box): string {
     }
     case 'title': {
       const size = p.size === 'lg' ? 22 : p.size === 'sm' ? 15 : 18
-      return text(x, y + h / 2, label, { size, weight: 600, maxW: w })
+      return para(x, y, label, { size, weight: 600, lineH: size + 8, maxW: w, maxLines: Math.max(1, Math.round(h / (size + 8))) })
     }
     case 'text':
-      if (label) return text(x, y + Math.min(h, 19) / 2 + 1, label, { size: 13, color: C.mid, maxW: w })
+      if (label) return para(x, y, label, { size: 13, color: C.mid, lineH: 19, maxW: w, maxLines: Math.max(1, Math.round(h / 19)) })
       return lines(x, y, w, Number(p.lines ?? 2))
     case 'button': {
       const v = p.variant ?? 'primary'
@@ -254,6 +298,149 @@ function paintBox(b: Box): string {
       }
       return s
     }
+    case 'select':
+      return rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill: C.bg, stroke: C.line, r: 6 }) + text(x + 10, y + h / 2, label || '请选择', { size: 13, color: label ? C.ink : C.line, maxW: w - 34 }) + `<path d="M${x + w - 20} ${y + h / 2 - 2}l4 4 4-4" fill="none" stroke="${C.mid}" stroke-width="1.5"/>`
+    case 'radio': {
+      const its = items(p.items, '选项一,选项二')
+      const active = Number(p.active ?? 0)
+      let s = ''
+      let cx = x
+      its.forEach((it, i) => {
+        const cy = p.dir === 'column' ? y + 15 + i * 30 : y + h / 2
+        const bx = p.dir === 'column' ? x : cx
+        s += `<circle cx="${bx + 9}" cy="${cy}" r="8" fill="${C.bg}" stroke="${C.line}"/>` + (i === active ? `<circle cx="${bx + 9}" cy="${cy}" r="4" fill="${C.ink}"/>` : '') + text(bx + 24, cy, it, { size: 13 })
+        cx += textWidth(it, 13) + 48
+      })
+      return s
+    }
+    case 'slider': {
+      const v = Math.max(0, Math.min(100, Number(p.value ?? 50))) / 100
+      const ty = label ? y + h - 10 : y + h / 2
+      return (label ? text(x, y + 9, label, { size: 12, color: C.mid, maxW: w }) : '') + rect(x, ty - 2, w, 4, { fill: C.fill2, r: 2 }) + rect(x, ty - 2, w * v, 4, { fill: C.ink, r: 2 }) + `<circle cx="${x + w * v}" cy="${ty}" r="8" fill="${C.bg}" stroke="${C.ink}" stroke-width="1.5"/>`
+    }
+    case 'progress': {
+      const v = Math.max(0, Math.min(100, Number(p.value ?? 40))) / 100
+      const ty = label ? y + h - 8 : y + h / 2 - 3
+      return (label ? text(x, y + 9, label, { size: 12, color: C.mid, maxW: w - 40 }) + text(x + w, y + 9, `${Math.round(v * 100)}%`, { size: 12, color: C.mid, anchor: 'end' }) : '') + rect(x, ty, w, 6, { fill: C.fill2, r: 3 }) + rect(x, ty, w * v, 6, { fill: C.mid, r: 3 })
+    }
+    case 'stepper': {
+      const its = items(p.items, '填写信息,确认,完成')
+      const active = Number(p.active ?? 0)
+      const cw = w / its.length
+      let s = ''
+      its.forEach((it, i) => {
+        const cx = x + cw * i + cw / 2
+        if (i > 0) s += `<line x1="${cx - cw + 14}" y1="${y + 14}" x2="${cx - 14}" y2="${y + 14}" stroke="${i <= active ? C.ink : C.soft}" stroke-width="1.5"/>`
+        const done = i < active
+        const cur = i === active
+        s += `<circle cx="${cx}" cy="${y + 14}" r="11" fill="${done || cur ? C.ink : C.bg}" stroke="${done || cur ? C.ink : C.line}"/>`
+        s += done ? icon('check', cx - 7, y + 7, 14, C.bg) : text(cx, y + 14.5, String(i + 1), { size: 11, color: cur ? C.bg : C.mid, anchor: 'middle' })
+        s += text(cx, y + 40, it, { size: 12, color: cur ? C.ink : C.mid, anchor: 'middle', weight: cur ? 600 : 400, maxW: cw - 6 })
+      })
+      return s
+    }
+    case 'pagination': {
+      const pages = Math.min(9, Number(p.pages ?? 5))
+      const active = Number(p.active ?? 0)
+      let s = ''
+      let cx = x + Math.max(0, (w - (pages * 34 + 64)) / 2)
+      s += rect(cx, y + 2, 28, 30, { stroke: C.soft, r: 6, fill: C.bg }) + icon('back', cx + 7, y + 10, 14, C.mid)
+      cx += 32
+      for (let i = 0; i < pages; i++) {
+        const on = i === active
+        s += rect(cx, y + 2, 30, 30, { fill: on ? C.ink : C.bg, stroke: on ? undefined : C.soft, r: 6 }) + text(cx + 15, y + 17, String(i + 1), { size: 12, color: on ? C.bg : C.ink, anchor: 'middle' })
+        cx += 34
+      }
+      s += rect(cx, y + 2, 28, 30, { stroke: C.soft, r: 6, fill: C.bg }) + icon('chevron', cx + 7, y + 10, 14, C.mid)
+      return s
+    }
+    case 'breadcrumb': {
+      const its = items(p.items, '首页,列表,详情')
+      let s = ''
+      let cx = x
+      its.forEach((it, i) => {
+        const last = i === its.length - 1
+        s += text(cx, y + h / 2, it, { size: 12, color: last ? C.ink : C.mid, weight: last ? 500 : 400 })
+        cx += textWidth(it, 12) + 6
+        if (!last) {
+          s += text(cx, y + h / 2, '/', { size: 12, color: C.soft })
+          cx += 16
+        }
+      })
+      return s
+    }
+    case 'titlebar': {
+      const mac = p.os === 'mac'
+      let s = rect(x, y, w, h, { fill: C.fill }) + `<line x1="${x}" y1="${y + h - 0.5}" x2="${x + w}" y2="${y + h - 0.5}" stroke="${C.soft}"/>`
+      if (mac) {
+        ;[0, 1, 2].forEach((i) => (s += `<circle cx="${x + 16 + i * 20}" cy="${y + h / 2}" r="6" fill="${C.bg}" stroke="${C.line}"/>`))
+        s += text(x + w / 2, y + h / 2, label, { size: 12, color: C.mid, anchor: 'middle', maxW: w - 160 })
+      } else {
+        s += rect(x + 10, y + h / 2 - 7, 14, 14, { fill: C.fill2, r: 3 }) + text(x + 32, y + h / 2, label, { size: 12, color: C.mid, maxW: w - 180 })
+        const bx = x + w - 138
+        s += `<path d="M${bx + 18} ${y + h / 2}h10" stroke="${C.mid}"/>` + rect(bx + 64, y + h / 2 - 5, 10, 10, { stroke: C.mid }) + `<path d="M${bx + 110} ${y + h / 2 - 5}l10 10m0-10l-10 10" stroke="${C.mid}"/>`
+      }
+      return s
+    }
+    case 'menubar': {
+      let s = rect(x, y, w, h, { fill: C.bg }) + `<line x1="${x}" y1="${y + h - 0.5}" x2="${x + w}" y2="${y + h - 0.5}" stroke="${C.fill2}"/>`
+      let cx = x + 10
+      for (const it of items(p.items, '文件,编辑,视图,帮助')) {
+        s += text(cx, y + h / 2, it, { size: 12, color: C.ink })
+        cx += textWidth(it, 12) + 22
+      }
+      return s
+    }
+    case 'toolbar': {
+      const its = items(p.items, 'plus,edit,trash,|,search,settings')
+      const showLabels = p.labels === true || p.labels === 'true'
+      let s = rect(x, y, w, h, { fill: C.bg }) + `<line x1="${x}" y1="${y + h - 0.5}" x2="${x + w}" y2="${y + h - 0.5}" stroke="${C.fill2}"/>`
+      let cx = x + 8
+      for (const it of its) {
+        if (it === '|') {
+          s += `<line x1="${cx + 4}" y1="${y + 8}" x2="${cx + 4}" y2="${y + h - 8}" stroke="${C.soft}"/>`
+          cx += 12
+          continue
+        }
+        const [ic, lab] = it.split(':')
+        const bw = showLabels ? Math.max(40, textWidth(lab ?? ic, 11) + 12) : 30
+        s += icon(ic, cx + bw / 2 - 9, y + (showLabels ? 7 : h / 2 - 9), 18, C.ink)
+        if (showLabels) s += text(cx + bw / 2, y + h - 11, lab ?? ic, { size: 11, color: C.mid, anchor: 'middle' })
+        cx += bw + 2
+      }
+      return s
+    }
+    case 'tree': {
+      const its = items(p.items, '文档,>项目 A,>>需求.md,>项目 B,图片')
+      const active = Number(p.active ?? -1)
+      let s = ''
+      its.forEach((raw, i) => {
+        const depth = (raw.match(/^>+/)?.[0].length ?? 0)
+        const name = raw.replace(/^>+\s*/, '')
+        const ry = y + 4 + i * 26
+        if (ry + 26 > y + h) return
+        const ix = x + 8 + depth * 16
+        if (i === active) s += rect(x + 2, ry, w - 4, 24, { fill: C.fill2, r: 4 })
+        const next = its[i + 1]
+        const isFolder = next ? (next.match(/^>+/)?.[0].length ?? 0) > depth : false
+        if (isFolder) s += `<path d="M${ix} ${ry + 9}l4 4 4-4" fill="none" stroke="${C.mid}" stroke-width="1.3"/>`
+        s += icon(isFolder ? 'folder' : 'file', ix + 12, ry + 4, 16, C.mid) + text(ix + 34, ry + 12, name, { size: 12, color: C.ink, maxW: w - (ix - x) - 40 })
+      })
+      return s
+    }
+    case 'statusbar': {
+      let s = rect(x, y, w, h, { fill: C.fill }) + `<line x1="${x}" y1="${y + 0.5}" x2="${x + w}" y2="${y + 0.5}" stroke="${C.soft}"/>`
+      const its = items(p.items, '就绪')
+      s += text(x + 10, y + h / 2, its[0], { size: 11, color: C.mid })
+      let cx = x + w - 10
+      for (const it of its.slice(1).reverse()) {
+        s += text(cx, y + h / 2, it, { size: 11, color: C.mid, anchor: 'end' })
+        cx -= textWidth(it, 11) + 20
+      }
+      return s
+    }
+    case 'splitter':
+      return w <= 8 ? `<line x1="${x + w / 2}" y1="${y}" x2="${x + w / 2}" y2="${y + h}" stroke="${C.soft}"/>` : `<line x1="${x}" y1="${y + h / 2}" x2="${x + w}" y2="${y + h / 2}" stroke="${C.soft}"/>`
     default:
       return ''
   }

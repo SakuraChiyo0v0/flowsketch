@@ -6,6 +6,7 @@ import { beginAi, cancelAi, runAll, runStep } from '../ai/runSteps'
 import { checkProject, type Issue } from '../model/check'
 import { applyPatch, describeOp } from '../model/patch'
 import type { ChatMessage } from '../model/types'
+import { DEVICE_KINDS, DEVICES } from '../model/types'
 import { useProject, useStore } from '../store'
 import { relayout } from '../flow/autoLayout'
 
@@ -43,9 +44,9 @@ function Guide() {
         <textarea rows={3} value={brief} placeholder="例如：一个给健身房会员用的约课 App，可以看课表、预约私教、签到、查看训练记录" onChange={(e) => setBrief(e.target.value)} onBlur={saveBrief} />
       </label>
       <div className="seg small">
-        {(['mobile', 'web'] as const).map((d) => (
+        {DEVICE_KINDS.map((d) => (
           <button key={d} className={project.device === d ? 'on' : ''} onClick={() => update((p) => ({ ...p, device: d }))}>
-            {d === 'mobile' ? '移动 App' : 'Web 应用'}
+            {DEVICES[d].name}
           </button>
         ))}
       </div>

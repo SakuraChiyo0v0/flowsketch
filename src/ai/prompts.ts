@@ -1,6 +1,6 @@
 import { ELEMENT_META, ELEMENT_TYPES } from '../model/elements'
 import type { PatchOp, Project } from '../model/types'
-import { DEFAULT_STATE } from '../model/types'
+import { DEFAULT_STATE, DEVICES } from '../model/types'
 
 // Prompt builders. The model always answers with JSON that we turn into PatchOps,
 // so every AI change goes through the same validated applyPatch path as user edits.
@@ -35,6 +35,8 @@ const LAYOUT_RULES = `布局规则：
 - 想让某块占满剩余高度：props.grow=true；想把底部按钮推到底：在它前面放 {"type":"spacer"}。
 - 移动端：顶部通常 header，主导航页面底部 tabbar；子页面 header.props.back=true。
 - Web 端：顶部 nav，常见左侧 column（props.w=220）+ 右侧主内容 column（grow）放在一个 row 里。
+- 桌面应用：最顶部 titlebar（窗口标题），其下按需 menubar、toolbar；主体是一个 row（props.grow=true）里放侧边栏 column（props.w=220，常含 tree 或 listItem 列表）、splitter、主内容 column（grow）；最底部 statusbar。不要用 tabbar 和手机式 header。
+- 设置类、属性类界面多用 row 把「标签文字 + 控件（select/toggle/radio/slider/input）」排成一行。
 - 浮层（modal/sheet）的根节点只画浮层内容本身，用 props.pad=20。
 - 会触发跳转的元素（按钮、列表项、图标等）必须带一个稳定、语义化的 id，例如 "login-submit"。
 可用元素：
@@ -42,7 +44,7 @@ const LAYOUT_RULES = `布局规则：
 
 export function projectSummary(p: Project, opts: { layouts?: boolean } = {}) {
   const lines: string[] = []
-  lines.push(`项目：${p.name}（${p.device === 'mobile' ? '移动 App' : 'Web 应用'}）`)
+  lines.push(`项目：${p.name}（${DEVICES[p.device].name}）`)
   if (p.brief) lines.push(`需求描述：${p.brief}`)
   if (p.roles.length) lines.push(`用户角色：${p.roles.join('、')}`)
   if (p.features.length) lines.push(`功能：\n${p.features.map((f) => `- ${f.name}${f.description ? `：${f.description}` : ''}`).join('\n')}`)
@@ -54,7 +56,7 @@ export function projectSummary(p: Project, opts: { layouts?: boolean } = {}) {
         for (const st of s.states) {
           const ids: string[] = []
           const walk = (e: { id: string; type: string; label?: string; children?: unknown[] }) => {
-            if (['button', 'listItem', 'icon', 'card', 'search', 'input', 'avatar', 'image'].includes(e.type) && e.label) ids.push(`${e.id}(${e.type}「${e.label}」)`)
+            if (['button', 'listItem', 'icon', 'card', 'search', 'input', 'avatar', 'image', 'select', 'menubar', 'toolbar', 'tree', 'table'].includes(e.type) && (e.label || ['menubar', 'toolbar', 'tree', 'table'].includes(e.type))) ids.push(`${e.id}(${e.type}「${e.label ?? ''}」)`)
             ;(e.children as typeof e[] | undefined)?.forEach(walk)
           }
           walk(st.root)
@@ -193,7 +195,7 @@ export function layoutPrompt(p: Project, screenId: string, stateIds?: string[]) 
       role: 'user' as const,
       content: `${projectSummary(p)}
 
-第 4 步：为「${s.name}」(${s.kind === 'overlay' ? `浮层 ${s.overlayType}` : p.device === 'mobile' ? '手机页面 375×812' : 'Web 页面 1280×800'}) 生成低保真线框布局。
+第 4 步：为「${s.name}」(${s.kind === 'overlay' ? `浮层 ${s.overlayType}` : DEVICES[p.device].hint}) 生成低保真线框布局。
 ${s.description ? `页面说明：${s.description}\n` : ''}需要生成的状态：${states.map((st) => `${st.id}(${st.name})`).join('、')}
 这个页面上的交互（布局里要有对应元素）：
 ${outgoing.length ? outgoing.join('\n') : '（暂无）'}

@@ -1,7 +1,7 @@
 // Core data model. Every view (flow canvas, page editor, SVG export) and the AI
 // read and write this one structure, so human edits and AI edits never diverge.
 
-export type DeviceKind = 'mobile' | 'web'
+export type DeviceKind = 'mobile' | 'web' | 'desktop'
 
 export type ElementType =
   | 'column'
@@ -27,6 +27,19 @@ export type ElementType =
   | 'spacer'
   | 'table'
   | 'chart'
+  | 'select'
+  | 'radio'
+  | 'slider'
+  | 'progress'
+  | 'stepper'
+  | 'pagination'
+  | 'breadcrumb'
+  | 'titlebar'
+  | 'menubar'
+  | 'toolbar'
+  | 'tree'
+  | 'statusbar'
+  | 'splitter'
 
 export type PropValue = string | number | boolean
 
@@ -167,9 +180,29 @@ export type PatchOp =
   | { op: 'setFeatures'; features: { name: string; description?: string }[]; roles?: string[] }
   | { op: 'renameProject'; name: string }
 
+export interface DeviceMeta {
+  name: string
+  short: string
+  w: number
+  h: number
+  /** how the AI should think about this surface */
+  hint: string
+  modalW: number
+  drawerW: number
+}
+
+export const DEVICES: Record<DeviceKind, DeviceMeta> = {
+  mobile: { name: '移动 App', short: '手机', w: 375, h: 812, hint: '手机页面 375×812', modalW: 320, drawerW: 300 },
+  web: { name: 'Web 应用', short: 'Web', w: 1280, h: 800, hint: 'Web 页面 1280×800', modalW: 480, drawerW: 360 },
+  desktop: { name: '桌面应用', short: '桌面', w: 1200, h: 760, hint: '桌面应用窗口 1200×760（Windows/macOS 原生应用）', modalW: 440, drawerW: 320 },
+}
+
+export const DEVICE_KINDS = Object.keys(DEVICES) as DeviceKind[]
+
 export const DEVICE_SIZE: Record<DeviceKind, { w: number; h: number }> = {
-  mobile: { w: 375, h: 812 },
-  web: { w: 1280, h: 800 },
+  mobile: DEVICES.mobile,
+  web: DEVICES.web,
+  desktop: DEVICES.desktop,
 }
 
 export const DEFAULT_STATE = 'default'

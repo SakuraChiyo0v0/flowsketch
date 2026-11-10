@@ -28,6 +28,8 @@ export const ScreenNode = memo(function ScreenNode({ data, selected }: NodeProps
   const fs = overlay ? frameSize(project, screen, def.id) : DEVICE_SIZE[project.device]
   const thumbW = overlay ? size.w - 24 : size.w - 12
   const extra = screen.states.length - 1
+  const naturalH = (thumbW / fs.w) * (overlay ? fs.h : DEVICE_SIZE[project.device].h)
+  const frameH = Math.min(size.h - 30, naturalH)
   return (
     <div className={`fnode ${overlay ? 'overlay' : 'page'} ${selected ? 'sel' : ''} ${issue ? `issue-${issue}` : ''}`} style={{ width: size.w }} onDoubleClick={() => openScreen(screen.id)}>
       <Handle type="target" position={Position.Left} style={{ top: 24 + (size.h - 24) / 2 }} />
@@ -36,7 +38,8 @@ export const ScreenNode = memo(function ScreenNode({ data, selected }: NodeProps
         <span className="name">{screen.name}</span>
         {overlay && <span className="tag">{OVERLAY_LABEL[screen.overlayType ?? 'modal']}</span>}
       </div>
-      <div className={`fnode-frame ${extra > 0 ? 'stacked' : ''}`} style={{ height: overlay ? undefined : Math.min(size.h - 30, (thumbW / fs.w) * DEVICE_SIZE[project.device].h) }}>
+      {/* fixed frame height so node sizes are predictable for auto layout; tall content is clipped */}
+      <div className={`fnode-frame ${extra > 0 ? 'stacked' : ''}`} style={{ height: frameH }}>
         <Thumb root={def.root} w={fs.w} h={Math.min(fs.h, overlay ? fs.h : DEVICE_SIZE[project.device].h)} width={thumbW} />
       </div>
       {screen.states.length > 1 && (
