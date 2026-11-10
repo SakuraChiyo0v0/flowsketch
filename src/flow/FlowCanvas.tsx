@@ -89,6 +89,7 @@ function Inner() {
   const patch = useStore((s) => s.patch)
   const select = useStore((s) => s.select)
   const sel = useStore((s) => s.sel)
+  const showSelf = useStore((s) => s.showSelf)
   const rf = useReactFlow()
   const [dragPos, setDragPos] = useState<Record<string, { x: number; y: number }>>({})
   const laidOut = useRef<string>('')
@@ -149,7 +150,7 @@ function Inner() {
 
   const edges: Edge[] = useMemo(() => {
     const stateName = (sid: string, st?: string) => project.screens.find((s) => s.id === sid)?.states.find((x) => x.id === st)?.name
-    return project.transitions.map((t) => ({
+    return project.transitions.filter((t) => showSelf || t.from !== t.to || sel.edgeId === t.id).map((t) => ({
       id: t.id,
       source: t.from,
       target: t.to,
@@ -158,7 +159,7 @@ function Inner() {
       selected: sel.edgeId === t.id,
       markerEnd: { type: MarkerType.ArrowClosed, color: EDGE_COLOR[t.kind], width: 18, height: 18 },
     }))
-  }, [project.transitions, project.screens, sel.edgeId])
+  }, [project.transitions, project.screens, sel.edgeId, showSelf])
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {

@@ -55,6 +55,8 @@ function useShortcuts() {
 }
 
 function FlowToolbar() {
+  const showSelf = useStore((s) => s.showSelf)
+  const setShowSelf = useStore((s) => s.setShowSelf)
   const add = (op: Parameters<ReturnType<typeof useStore.getState>['patch']>[0][number], kind: 'screen' | 'cond') => {
     const st = useStore.getState()
     st.patch([op])
@@ -72,6 +74,10 @@ function FlowToolbar() {
       <button className="btn ghost sm" onClick={() => add({ op: 'addCondition', condition: { id: '', label: '条件？' } }, 'cond')}>
         ◇ 判断
       </button>
+      <label className="legend toggle" title="页面内的状态切换、关闭浮层等自连线">
+        <input type="checkbox" checked={showSelf} onChange={(e) => setShowSelf(e.target.checked)} />
+        页内连线
+      </label>
       <span className="legend">
         <i className="lg normal" />主流程 <i className="lg back" />返回 <i className="lg error" />出错
       </span>

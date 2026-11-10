@@ -105,10 +105,10 @@ export function sitemapPrompt(p: Project) {
       content: `${projectSummary(p)}
 
 第 2 步：设计页面结构。列出实现上述功能所需的全部页面和浮层（弹窗 modal / 底部抽屉 sheet / 侧边抽屉 drawer / 轻提示 toast）。
-- 每个页面列出它的关键状态：第一个必须是 {"id":"default","name":"默认"}，再补充真实会出现的状态，如 empty(空)、loading(加载中)、error(出错)、failed(失败) 等，没必要的不要加。
+- 每个页面列出它的关键状态：第一个必须是 {"id":"default","name":"默认"}，再补充对交互逻辑有意义的状态，如 empty(空)、failed(失败)、full(已满) 等。每个页面最多 3 个状态；通用的「加载中」不要列。
 - 确认、登录拦截、选择器这类不应该是整页的，做成浮层。
 - id 用英文小写短横线。entry 是用户打开应用看到的第一个页面。
-- 一般 6-14 个节点。
+- 一般 6-12 个节点，覆盖主要功能即可，不要为次要功能单独开页面。
 输出格式：
 {"entry":"home","screens":[{"id":"home","name":"首页","kind":"page","description":"一句话","states":[{"id":"default","name":"默认"}]},{"id":"login","name":"登录","kind":"overlay","overlayType":"modal","states":[{"id":"default","name":"默认"}]}]}`,
     },
@@ -153,8 +153,11 @@ export function flowsPrompt(p: Project) {
       role: 'user' as const,
       content: `${projectSummary(p, { layouts: true })}
 
-第 3 步：设计交互流程。用连线描述页面之间怎么走，重点是完整的操作逻辑而不是只有一条主路径：
-- 需要判断的地方加判断节点（菱形），如「已登录？」「支付成功？」「表单有效？」，判断节点的每条出线用 branch 标「是」/「否」。
+第 3 步：设计交互流程。用连线描述页面之间怎么走，重点是完整的操作逻辑而不是只有一条主路径，但要克制，让流程图一眼能看懂：
+- 只在真正影响去向的业务决策处加判断节点（菱形），如「已登录？」「支付成功？」「课程已满？」。判断节点总数不超过页面数的一半，最多 8 个。
+- 不要为加载成功/失败、有无数据这类页面内状态加判断节点，直接用 setState 连线或在 toState 上表达。
+- 判断节点的每条出线用 branch 标「是」/「否」。
+- 连线总数控制在页面数的 2.5 倍以内；同一对页面之间最多 2 条。
 - 每个页面状态都要说明怎么进入（例如 toState:"empty"），出错状态要有重试或取消的出路（kind:"error"）。
 - 返回/取消用 kind:"back"。浮层用 action:"open" 打开，用 action:"close"（from 和 to 都是浮层自身）关闭。
 - 同一页面内状态切换用 action:"setState"，from 和 to 相同，用 fromState/toState。
@@ -180,7 +183,8 @@ export function flowsToOps(v: unknown): PatchOp[] {
 // ---- step 4: layouts -----------------------------------------------------------
 
 export function layoutPrompt(p: Project, screenId: string, stateIds?: string[]) {
-  const s = p.screens.find((x) => x.id === screenId)!
+  const s = p.screens.find((x) => x.id === screenId)
+  if (!s) throw new Error(`页面不存在: ${screenId}`)
   const states = s.states.filter((st) => !stateIds || stateIds.includes(st.id))
   const outgoing = p.transitions.filter((t) => t.from === screenId).map((t) => `${t.fromState ?? DEFAULT_STATE} 状态：${t.label ?? t.branch ?? t.action} → ${p.screens.find((x) => x.id === t.to)?.name ?? p.conditions.find((c) => c.id === t.to)?.label ?? t.to}${t.elementId ? `（元素 id 必须为 ${t.elementId}）` : ''}`)
   return [

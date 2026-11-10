@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { relayout } from '../flow/FlowCanvas'
 import { exportFlow, exportJson, exportPages, exportSpec } from '../export/exporters'
 import type { Project } from '../model/types'
@@ -6,8 +6,15 @@ import { useProject, useStore } from '../store'
 
 function Menu({ label, children }: { label: React.ReactNode; children: (close: () => void) => React.ReactNode }) {
   const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [open])
   return (
-    <div className="menu" onMouseLeave={() => setOpen(false)}>
+    <div className="menu" ref={ref}>
       <button className="btn ghost" onClick={() => setOpen((o) => !o)}>{label}</button>
       {open && <div className="menu-pop">{children(() => setOpen(false))}</div>}
     </div>

@@ -39,14 +39,23 @@ export async function runStep(key: StepKey, opts: { screenIds?: string[] } = {})
       return `已生成 ${useStore.getState().project().features.length} 个功能点`
     }
     if (key === 'sitemap') {
-      const p = st.project()
+      // regenerating the structure replaces pages and everything that depends on them
+      const p = { ...st.project(), screens: [], transitions: [], conditions: [], entryId: undefined }
       const ops = await chatJson(ai, sitemapPrompt(p), (v) => sitemapToOps(v, p), { signal })
+      useStore.getState().update((x) => ({ ...x, screens: [], transitions: [], conditions: [], positions: {}, entryId: undefined, guideStep: Math.min(x.guideStep, 1) }))
       const errs = commit(ops, 2)
       await relayout()
       return `页面结构已更新（${useStore.getState().project().screens.length} 个节点）${errs.length ? `，${errs.length} 处被跳过` : ''}`
     }
     if (key === 'flows') {
-      const ops = await chatJson(ai, flowsPrompt(st.project()), flowsToOps, { signal })
+      // regenerate from a clean graph so repeated runs don't pile up edges
+      const base = { ...st.project(), transitions: [], conditions: [] }
+      const ops = await chatJson(ai, flowsPrompt(base), flowsToOps, { signal })
+      useStore.getState().update((x) => {
+        const positions = { ...x.positions }
+        for (const c of x.conditions) delete positions[c.id]
+        return { ...x, transitions: [], conditions: [], positions, guideStep: Math.min(x.guideStep, 2) }
+      })
       const errs = commit(ops, 3)
       await relayout()
       return `新增 ${ops.length - errs.length} 条交互${errs.length ? `，${errs.length} 处无效已跳过` : ''}`
@@ -66,7 +75,7 @@ export async function runStep(key: StepKey, opts: { screenIds?: string[] } = {})
           const cur = useStore.getState().project()
           const allowed = cur.screens.find((x) => x.id === s.id)?.states.map((x) => x.id) ?? []
           const ops = await chatJson(ai, layoutPrompt(cur, s.id), (v) => layoutToOps(v, s.id, allowed), { signal, maxTokens: 12000 })
-          commit(ops, targets.length === p.screens.length ? 4 : 3)
+          commit(ops, 3)
           done++
         } catch (e) {
           if (signal.aborted) return

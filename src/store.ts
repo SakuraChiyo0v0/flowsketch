@@ -36,6 +36,9 @@ interface State {
   ai: AiSettings
   busy: string | null
   toast: string | null
+  /** show same-screen transitions (state switches, closes) on the flow canvas */
+  showSelf: boolean
+  setShowSelf: (v: boolean) => void
 
   project: () => Project
   /** apply ops as one undoable step; returns errors */
@@ -118,6 +121,11 @@ export const useStore = create<State>((set, get) => ({
   ai: loadAi(),
   busy: null,
   toast: null,
+  showSelf: localStorage.getItem('flowsketch.showSelf') === '1',
+  setShowSelf: (v) => {
+    localStorage.setItem('flowsketch.showSelf', v ? '1' : '0')
+    set({ showSelf: v })
+  },
 
   project: () => get().projects[get().currentId],
 

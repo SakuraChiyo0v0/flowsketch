@@ -60,6 +60,9 @@ function Guide() {
                 className={`btn sm ${next ? '' : 'ghost'}`}
                 disabled={!!busy || blocked || (s.n === 1 && !brief.trim())}
                 onClick={() => {
+                  if (s.key === 'sitemap' && project.screens.length && !confirm('重新生成页面结构会替换现有的全部页面、布局和连线（可撤销）。继续？')) return
+                  if (s.key === 'flows' && project.transitions.length && !confirm('重新生成交互流程会替换现有的全部连线和判断（可撤销）。继续？')) return
+                  if (s.key === 'layouts' && done && !confirm('重新生成所有页面的布局？手动修改过的布局会被覆盖（可撤销）。')) return
                   saveBrief()
                   run(() => runStep(s.key as StepKey))
                 }}

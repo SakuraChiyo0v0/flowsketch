@@ -240,7 +240,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .zoom { font-size: 12px; color: var(--mid); width: 44px; text-align: center; border: none; background: none; }
 .page-stage { flex: 1; overflow: auto; display: flex; align-items: flex-start; gap: 24px; padding: 32px 24px; min-height: 0; }
 .page-stage::before, .page-stage::after { content: ''; flex: 1; min-width: 0; }
-.io-col { width: 170px; flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; }
+.io-col { width: 180px; flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; max-height: calc(100vh - 170px); overflow-y: auto; padding: 2px; }
 .io-title { font-size: 11px; color: var(--mid); font-weight: 600; }
 .io-none { font-size: 12px; color: var(--line2); }
 .io-item { display: flex; flex-direction: column; text-align: left; gap: 2px; border: 1px solid var(--line); background: var(--bg); border-left: 3px solid var(--accent); border-radius: 6px; padding: 6px 8px; font-size: 12px; }
@@ -274,3 +274,4 @@ input, textarea, select { font: inherit; color: inherit; }
 .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 9px 16px; border-radius: 8px; z-index: 200; max-width: 70vw; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2); }
 
 .react-flow__minimap { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.legend.toggle { gap: 4px; cursor: pointer; }
