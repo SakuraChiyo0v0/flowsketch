@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ELEMENT_META, ELEMENT_TYPES, elementName } from '../model/elements'
-import type { WElement } from '../model/types'
+import { ELEMENT_META, elementName, findElement, findParent, insertInTree, isContainer, newElement } from '../model/elements'
+import type { DeviceKind, ElementType, WElement } from '../model/types'
 import { DEFAULT_STATE } from '../model/types'
 import { DND_TYPE } from '../page/PageEditor'
 import { useProject, useStore } from '../store'
@@ -119,7 +119,70 @@ function Layers() {
   )
 }
 
+const PALETTE_GROUPS: { name: string; types: ElementType[] }[] = [
+  { name: '布局', types: ['column', 'row', 'card', 'divider', 'spacer', 'splitter'] },
+  { name: '窗口与导航', types: ['titlebar', 'menubar', 'toolbar', 'header', 'nav', 'tabbar', 'tabs', 'breadcrumb', 'tree', 'statusbar'] },
+  { name: '内容', types: ['title', 'text', 'image', 'listItem', 'table', 'chart', 'avatar', 'icon', 'badge'] },
+  { name: '表单与操作', types: ['button', 'input', 'search', 'select', 'checkbox', 'radio', 'toggle', 'slider'] },
+  { name: '反馈与进度', types: ['progress', 'stepper', 'pagination'] },
+]
+
+/** Elements that only make sense on some devices. */
+const DEVICE_ONLY: Partial<Record<ElementType, DeviceKind[]>> = {
+  titlebar: ['desktop'],
+  menubar: ['desktop'],
+  toolbar: ['desktop', 'web'],
+  statusbar: ['desktop'],
+  splitter: ['desktop', 'web'],
+  tabbar: ['mobile'],
+  header: ['mobile', 'desktop'],
+  nav: ['web'],
+  breadcrumb: ['web', 'desktop'],
+  pagination: ['web', 'desktop'],
+  tree: ['desktop', 'web'],
+}
+
+const findEl = findElement
+const insertInto = (root: WElement, parentId: string, el: WElement) => insertInTree(root, parentId, el)
+function insertAfter(root: WElement, id: string, el: WElement) {
+  const parent = findParent(root, id)
+  if (!parent) return insertInTree(root, root.id, el)
+  const idx = (parent.children ?? []).findIndex((c) => c.id === id)
+  return insertInTree(root, parent.id, el, idx + 1)
+}
+/** The page's main content column: the largest growing column under the root, else the root. */
+function mainColumn(root: WElement): WElement {
+  let best: WElement = root
+  const visit = (el: WElement, depth: number) => {
+    if (depth > 3) return
+    for (const c of el.children ?? []) {
+      if ((c.type === 'column' || c.type === 'card') && c.props?.grow) best = c
+      if (c.type === 'row' || c.type === 'column') visit(c, depth + 1)
+    }
+  }
+  visit(root, 0)
+  return best
+}
+
 function Palette() {
+  const insertNew = (type: ElementType) => {
+    const st = useStore.getState()
+    const p = st.project()
+    const scr = p.screens.find((s) => s.id === st.screenId)
+    const state = scr?.states.find((s) => s.id === st.stateId)
+    if (!scr || !state) return
+    const el = newElement(type)
+    const root = state.root
+    // insert after the selected element (inside it if it's an empty container); otherwise append to the page
+    const selId = st.sel.elementId
+    let next: WElement
+    const selected = selId ? findEl(root, selId) : undefined
+    if (selected && isContainer(selected.type) && (selected === root || !selected.children?.length)) next = insertInto(root, selected.id, el)
+    else if (selected && selected !== root) next = insertAfter(root, selected.id, el)
+    else next = insertInto(root, mainColumn(root).id, el)
+    st.update((x) => ({ ...x, screens: x.screens.map((s) => (s.id === scr.id ? { ...s, states: s.states.map((y) => (y.id === state.id ? { ...y, root: next } : y)) } : s)) }))
+    st.select({ elementId: el.id })
+  }
   const project = useProject()
   const view = useStore((s) => s.view)
   const update = useStore((s) => s.update)
@@ -151,18 +214,30 @@ function Palette() {
       </div>
       {disabled && <div className="side-empty">进入页面编辑后，拖拽到线框中使用</div>}
       {tab === 'basic' ? (
-        <div className="pal-grid">
-          {ELEMENT_TYPES.map((t) => (
-            <div
-              key={t}
-              className={`pal-item ${disabled ? 'dis' : ''}`}
-              draggable={!disabled}
-              onDragStart={(e) => e.dataTransfer.setData(DND_TYPE, JSON.stringify({ kind: 'new', type: t }))}
-              title={ELEMENT_META[t].hint}
-            >
-              {ELEMENT_META[t].name}
-            </div>
-          ))}
+        <div className="pal-groups">
+          {PALETTE_GROUPS.map((g) => {
+            const types = g.types.filter((t) => !DEVICE_ONLY[t] || DEVICE_ONLY[t]!.includes(project.device))
+            if (!types.length) return null
+            return (
+              <div key={g.name} className="pal-group">
+                <div className="pal-gname">{g.name}</div>
+                <div className="pal-grid">
+                  {types.map((t) => (
+                    <div
+                      key={t}
+                      className={`pal-item ${disabled ? 'dis' : ''}`}
+                      draggable={!disabled}
+                      onDragStart={(e) => e.dataTransfer.setData(DND_TYPE, JSON.stringify({ kind: 'new', type: t }))}
+                      onClick={() => !disabled && insertNew(t)}
+                      title={`${ELEMENT_META[t].hint}\n点击插入到选中元素之后，或拖到画布上`}
+                    >
+                      {ELEMENT_META[t].name}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </div>
       ) : (
         <div className="lib-list">

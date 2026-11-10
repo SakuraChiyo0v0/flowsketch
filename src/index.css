@@ -276,3 +276,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .react-flow__minimap { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .legend.toggle { gap: 4px; cursor: pointer; }
 .busy .elapsed { font-variant-numeric: tabular-nums; opacity: 0.7; }
+.pal-groups { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 8px; }
+.pal-groups .pal-grid { padding: 0; }
+.pal-gname { font-size: 11px; color: var(--mid); margin: 2px 0 4px; }
+.pal-item { cursor: pointer; }

@@ -320,13 +320,22 @@ function ElementProps({ el, screen, stateId }: { el: WElement; screen: Screen; s
     })
 
   const addLink = () => {
+    const fromState = stateId === DEFAULT_STATE ? undefined : stateId
+    const label = el.label && !['icon'].includes(el.type) ? el.label : ''
+    // sensible default target by element kind
+    const inPlace = ['toggle', 'checkbox', 'radio', 'select', 'slider', 'tabs'].includes(el.type)
+    const closeLike = screen.kind === 'overlay' && /关闭|取消|完成|确定|知道了/.test(el.label ?? '')
+    const backLike = el.type === 'header' || /返回|取消/.test(el.label ?? '')
+    const other = screen.states.find((s) => s.id !== stateId)
     const target = project.screens.find((s) => s.id !== screen.id) ?? screen
-    patch([
-      {
-        op: 'addTransition',
-        transition: { from: screen.id, fromState: stateId === DEFAULT_STATE ? undefined : stateId, elementId: el.id, to: target.id, label: el.label ?? '', action: target.kind === 'overlay' ? 'open' : 'navigate' },
-      },
-    ])
+    const transition = closeLike
+      ? { from: screen.id, fromState, elementId: el.id, to: screen.id, label, action: 'close' as const, kind: 'back' as const }
+      : inPlace && other
+        ? { from: screen.id, fromState, elementId: el.id, to: screen.id, toState: other.id, label, action: 'setState' as const }
+        : backLike
+          ? { from: screen.id, fromState, elementId: el.id, to: target.id, label, action: 'back' as const, kind: 'back' as const }
+          : { from: screen.id, fromState, elementId: el.id, to: target.id, label, action: target.kind === 'overlay' ? ('open' as const) : ('navigate' as const) }
+    patch([{ op: 'addTransition', transition }])
   }
 
   return (

@@ -109,6 +109,8 @@ function persist(projects: Record<string, Project>, cur: string) {
 
 const HISTORY = 80
 
+let lastEditAt = 0
+
 export const useStore = create<State>((set, get) => ({
   projects: initial,
   currentId: initialId,
@@ -134,9 +136,14 @@ export const useStore = create<State>((set, get) => ({
     const cur = projects[currentId]
     const next = { ...fn(cur), updatedAt: Date.now() }
     const nextProjects = { ...projects, [currentId]: next }
+    // typing in a field fires one update per keystroke; merge edits made within
+    // 800ms of each other into one undo step
+    const now = Date.now()
+    const merge = undoable && now - lastEditAt < 800 && document.activeElement?.matches('input, textarea')
+    lastEditAt = undoable ? now : lastEditAt
     set({
       projects: nextProjects,
-      ...(undoable ? { past: [...past.slice(-HISTORY), cur], future: [] } : {}),
+      ...(undoable && !merge ? { past: [...past.slice(-HISTORY), cur], future: [] } : undoable ? { future: [] } : {}),
     })
     persist(nextProjects, currentId)
     // keep page view pointing at something that exists

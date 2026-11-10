@@ -77,9 +77,15 @@ export function PageEditor() {
     }
     const parentId = target.id
     if (data.kind === 'move') {
-      if (data.id === parentId || isDescendant(state.root, data.id, parentId)) return
+      if (data.id === parentId || data.id === targetId || isDescendant(state.root, data.id, parentId)) return
       const el = findElement(state.root, data.id)
       if (!el) return
+      // moving within the same parent: removing the element first shifts later indexes by one
+      const oldParent = findParent(state.root, data.id)
+      if (index !== undefined && oldParent?.id === parentId) {
+        const oldIdx = (oldParent.children ?? []).findIndex((c) => c.id === data.id)
+        if (oldIdx < index) index -= 1
+      }
       setRoot((r) => insertInTree(removeFromTree(r, data.id), parentId, el, index))
       select({ elementId: data.id })
       return

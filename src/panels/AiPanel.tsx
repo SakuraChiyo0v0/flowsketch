@@ -295,18 +295,16 @@ function LogicCheck({ onAskAi }: { onAskAi: (text: string) => void }) {
 function BusyBar({ text }: { text: string }) {
   // restart the timer whenever the phase (text before " · ") changes
   const phase = text.split(' · ')[0]
-  const [start, setStart] = useState(() => Date.now())
-  const [lastPhase, setLastPhase] = useState(phase)
-  if (phase !== lastPhase) {
-    setLastPhase(phase)
-    setStart(Date.now())
-  }
-  const [now, setNow] = useState(start)
+  // seconds since the phase began; reset by the effect below when the phase changes
+  const [sec, setSec] = useState(0)
   useEffect(() => {
-    const iv = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(iv)
-  }, [])
-  const sec = Math.round((now - start) / 1000)
+    const t0 = Date.now()
+    const iv = window.setInterval(() => setSec(Math.round((Date.now() - t0) / 1000)), 1000)
+    return () => {
+      window.clearInterval(iv)
+      setSec(0)
+    }
+  }, [phase])
   return (
     <div className="busy">
       <span className="spin" />
