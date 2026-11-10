@@ -37,9 +37,16 @@ export function PageEditor() {
     // stage padding 48 + 4 flex gaps of 24 + two io columns
     const availW = el.clientWidth - 2 * 150 - 48 - 4 * 24 - 8
     const dev = DEVICE_SIZE[project.device]
-    // mobile: fit height; web: fit width (pages are wide, vertical scroll is fine)
-    const z = project.device === 'mobile' ? Math.min(1, availH / Math.min(fs.h, dev.h * 1.15), availW / fs.w) : Math.min(1, availW / fs.w)
-    setZoom(Math.max(0.25, Math.floor(z * 20) / 20))
+    // mobile: fit height; web: fit width (pages are wide, vertical scroll is fine);
+    // desktop: fit the whole window (it has a fixed size, nothing scrolls)
+    const z =
+      project.device === 'mobile'
+        ? Math.min(1, availH / Math.min(fs.h, dev.h * 1.15), availW / fs.w)
+        : project.device === 'desktop'
+          ? Math.min(1, availW / fs.w, availH / Math.min(fs.h, dev.h))
+          : Math.min(1, availW / fs.w)
+    // round to 5% but never below what fits
+    setZoom(Math.max(0.25, Math.floor(z * 100) / 100))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitKey])
 
