@@ -141,14 +141,16 @@ export function pagesSheetSvg(p: Project): string {
       const fs = frameSize(p, s, st.id)
       items.push({ title: `${s.name}${s.states.length > 1 ? ` · ${st.name}` : ''}`, svg: paintTree(st.root, fs.w, fs.h).svg, w: fs.w, h: fs.h })
     }
-  const cols = p.device === 'mobile' ? 5 : 2
+  // wrap rows by width (not a fixed column count) so small overlays pack next to each other
+  const dev = DEVICE_SIZE[p.device]
+  const maxW = p.device === 'mobile' ? (dev.w + gap) * 5 : (dev.w + gap) * 2 + gap
   let x = gap
   let y = gap + 30
   let rowH = 0
   let W = 0
   let body = ''
   items.forEach((it, i) => {
-    if (i > 0 && i % cols === 0) {
+    if (x > gap && x + it.w > maxW) {
       x = gap
       y += rowH + gap + 28
       rowH = 0
