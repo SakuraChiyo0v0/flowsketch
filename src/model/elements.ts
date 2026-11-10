@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import type { ComponentDef, ElementType, PropValue, WElement } from './types'
+import type { ComponentDef, DeviceKind, ElementType, PropValue, WElement } from './types'
 
 export interface ElementMeta {
   type: ElementType
@@ -134,6 +134,37 @@ export function normalizeElement(raw: unknown, library: ComponentDef[] = [], see
 
 export function emptyRoot(): WElement {
   return { id: nanoid(8), type: 'column', props: { gap: 0 }, children: [] }
+}
+
+/** Starter skeleton for a manually created screen so it isn't a blank box. */
+export function starterRoot(device: DeviceKind, kind: 'page' | 'overlay', name: string, appName: string): WElement {
+  const n = (raw: unknown) => normalizeElement(raw)
+  if (kind === 'overlay')
+    return n({
+      type: 'column',
+      props: { pad: 20, gap: 12 },
+      children: [{ type: 'title', label: name }, { type: 'text', props: { lines: 2 } }, { type: 'row', props: { align: 'end', gap: 8 }, children: [{ type: 'button', label: '取消', props: { variant: 'secondary' } }, { type: 'button', label: '确定' }] }],
+    })
+  const content = { type: 'column', props: { pad: 16, gap: 12, grow: true }, children: [{ type: 'title', label: name }, { type: 'text', props: { lines: 3 } }] }
+  if (device === 'desktop')
+    return n({
+      type: 'column',
+      children: [
+        { type: 'titlebar', label: `${appName} - ${name}` },
+        { type: 'menubar' },
+        { type: 'row', props: { grow: true, gap: 0 }, children: [{ type: 'column', props: { w: 220, pad: 8 }, children: [{ type: 'tree' }] }, { type: 'splitter' }, content] },
+        { type: 'statusbar', props: { items: '就绪' } },
+      ],
+    })
+  if (device === 'web')
+    return n({
+      type: 'column',
+      children: [
+        { type: 'nav', label: appName },
+        { type: 'row', props: { grow: true, gap: 0 }, children: [{ type: 'column', props: { w: 220, pad: 12, gap: 4 }, children: [{ type: 'listItem', label: '菜单一' }, { type: 'listItem', label: '菜单二' }] }, { type: 'divider' }, content] },
+      ],
+    })
+  return n({ type: 'column', children: [{ type: 'header', label: name }, content] })
 }
 
 // ---- tree helpers ----------------------------------------------------------

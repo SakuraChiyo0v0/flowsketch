@@ -1,5 +1,5 @@
 import type { Project, Transition } from '../model/types'
-import { DEFAULT_STATE, DEVICE_SIZE } from '../model/types'
+import { DEFAULT_STATE, DEVICE_SIZE, DEVICES } from '../model/types'
 import { C, esc, paintTree } from '../render/paint'
 import { frameSize, OVERLAY_LABEL } from '../render/frame'
 import { nodeSize } from '../flow/autoLayout'
@@ -202,23 +202,73 @@ export async function exportPages(p: Project, fmt: 'svg' | 'png') {
 }
 
 /** Markdown spec: features, pages, states, and every transition. Useful to hand to developers or another AI. */
-export function exportSpec(p: Project) {
+const TRIGGER_CN: Record<string, string> = { tap: '点击', submit: '提交', swipe: '滑动', longpress: '长按', auto: '自动', back: '返回键', condition: '条件' }
+const ACTION_CN: Record<string, string> = { navigate: '跳转到', open: '打开', close: '关闭', back: '返回', setState: '切换为' }
+
+export function specMarkdown(p: Project): string {
   const name = (id: string) => p.screens.find((s) => s.id === id)?.name ?? p.conditions.find((c) => c.id === id)?.label ?? id
-  const lines = [`# ${p.name}`, '', p.brief, '']
+  const stName = (sid: string, st?: string) => (st ? p.screens.find((x) => x.id === sid)?.states.find((x) => x.id === st)?.name : undefined)
+  const elLabel = (sid: string, elId?: string) => {
+    if (!elId) return undefined
+    for (const st of p.screens.find((x) => x.id === sid)?.states ?? []) {
+      let found: string | undefined
+      const visit = (e: { id: string; label?: string; type: string; children?: unknown[] }) => {
+        if (e.id === elId) found = e.label ? `「${e.label}」` : e.type
+        ;(e.children as (typeof e)[] | undefined)?.forEach(visit)
+      }
+      visit(st.root)
+      if (found) return found
+    }
+    return undefined
+  }
+  const dest = (t: Project['transitions'][number]) => {
+    if (t.action === 'close') return '关闭当前浮层'
+    if (t.action === 'setState' && t.from === t.to) return `切换为「${stName(t.to, t.toState) ?? '默认'}」状态`
+    const cond = p.conditions.find((c) => c.id === t.to)
+    if (cond) {
+      const branches = p.transitions.filter((x) => x.from === cond.id).map((x) => `${x.branch ?? '?'} → ${name(x.to)}${x.toState ? `（${stName(x.to, x.toState)}）` : ''}`)
+      return `判断「${cond.label}」：${branches.join('；') || '（未连分支）'}`
+    }
+    const st = stName(t.to, t.toState)
+    return `${ACTION_CN[t.action] ?? ''}「${name(t.to)}」${st ? `（${st}）` : ''}`
+  }
+  const lines = [`# ${p.name}`, '', `> ${DEVICES[p.device].name} · ${p.screens.filter((s) => s.kind === 'page').length} 个页面 · ${p.screens.filter((s) => s.kind === 'overlay').length} 个浮层 · ${p.conditions.length} 个判断`, '']
+  if (p.brief) lines.push(p.brief, '')
+  if (p.roles?.length) lines.push(`**用户角色**：${p.roles.join('、')}`, '')
   if (p.features.length) {
     lines.push('## 功能清单', '')
     for (const f of p.features) lines.push(`- **${f.name}**${f.description ? `：${f.description}` : ''}`)
     lines.push('')
   }
-  lines.push('## 页面', '')
-  for (const s of p.screens) {
+  lines.push('## 页面与交互', '')
+  // entry first, then pages, then overlays
+  const ordered = [...p.screens].sort((a, b) => (a.id === p.entryId ? -1 : b.id === p.entryId ? 1 : a.kind === b.kind ? 0 : a.kind === 'page' ? -1 : 1))
+  for (const s of ordered) {
     lines.push(`### ${s.name}${s.kind === 'overlay' ? `（${OVERLAY_LABEL[s.overlayType ?? 'modal']}）` : ''}${s.id === p.entryId ? ' · 入口' : ''}`, '')
     if (s.description) lines.push(s.description, '')
-    if (s.states.length > 1) lines.push(`状态：${s.states.map((x) => x.name).join('、')}`, '')
+    if (s.states.length > 1) lines.push(`**状态**：${s.states.map((x) => x.name).join('、')}`, '')
+    // real entry paths only: skip back edges, and resolve condition nodes to the pages before them
+    const ins = p.transitions.filter((t) => t.to === s.id && t.from !== s.id && t.kind !== 'back')
+    const via = (t: Project['transitions'][number]) => {
+      const c = p.conditions.find((x) => x.id === t.from)
+      if (!c) return [name(t.from) + (t.toState ? `（进入${stName(s.id, t.toState)}）` : '')]
+      return p.transitions.filter((x) => x.to === c.id && x.from !== s.id).map((x) => `${name(x.from)}（${c.label.replace(/[？?]$/, '')}：${t.branch ?? ''}）`)
+    }
+    if (ins.length) lines.push(`**进入方式**：${[...new Set(ins.flatMap(via))].join('、')}`, '')
     const outs = p.transitions.filter((t) => t.from === s.id)
     if (outs.length) {
-      lines.push('| 状态 | 触发 | 去向 | 说明 |', '|---|---|---|---|')
-      for (const t of outs) lines.push(`| ${s.states.find((x) => x.id === (t.fromState ?? DEFAULT_STATE))?.name ?? ''} | ${t.trigger} / ${t.action} | ${name(t.to)}${t.toState ? `[${p.screens.find((x) => x.id === t.to)?.states.find((x) => x.id === t.toState)?.name}]` : ''} | ${t.label ?? ''} |`)
+      const multi = s.states.length > 1
+      lines.push(multi ? '| 状态 | 操作 | 结果 | 类型 |' : '| 操作 | 结果 | 类型 |', multi ? '|---|---|---|---|' : '|---|---|---|')
+      for (const t of outs) {
+        const el = elLabel(s.id, t.elementId)
+        const what = el ?? (t.label ? `「${t.label}」` : '')
+        const op = t.trigger === 'tap' ? `点击${what}` : t.trigger === 'auto' ? `自动${t.label ? `（${t.label}）` : ''}` : `${TRIGGER_CN[t.trigger] ?? t.trigger}${what}`
+        const kind = t.kind === 'error' ? '出错' : t.kind === 'back' ? '返回' : '主流程'
+        const note = el && t.label && `「${t.label}」` !== el ? `（${t.label}）` : ''
+        const row = [op || '—', dest(t) + note, kind]
+        if (multi) row.unshift(stName(s.id, t.fromState) ?? '默认')
+        lines.push(`| ${row.join(' | ')} |`)
+      }
       lines.push('')
     }
   }
@@ -230,5 +280,9 @@ export function exportSpec(p: Project) {
     }
     lines.push('')
   }
-  download(`${safe(p.name)}-交互说明.md`, lines.join('\n'), 'text/markdown')
+  return lines.join('\n')
+}
+
+export function exportSpec(p: Project) {
+  download(`${safe(p.name)}-交互说明.md`, specMarkdown(p), 'text/markdown')
 }

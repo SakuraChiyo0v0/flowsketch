@@ -280,3 +280,4 @@ input, textarea, select { font: inherit; color: inherit; }
 .pal-groups .pal-grid { padding: 0; }
 .pal-gname { font-size: 11px; color: var(--mid); margin: 2px 0 4px; }
 .pal-item { cursor: pointer; }
+.add-link { font-size: 12px; color: var(--accent); }

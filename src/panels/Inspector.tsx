@@ -177,6 +177,29 @@ function ScreenProps({ s }: { s: Screen }) {
           {[t.branch, t.label].filter(Boolean).join(' · ') || t.action} → {project.screens.find((x) => x.id === t.to)?.name ?? project.conditions.find((c) => c.id === t.to)?.label}
         </button>
       ))}
+      <select
+        className="screen-pick add-link"
+        value=""
+        onChange={(e) => {
+          const to = e.target.value
+          if (!to) return
+          const target = project.screens.find((x) => x.id === to)
+          patch([{ op: 'addTransition', transition: { from: s.id, to, action: target?.kind === 'overlay' ? 'open' : undefined } }])
+          const t = useStore.getState().project().transitions.at(-1)
+          if (t) select({ edgeId: t.id })
+        }}
+      >
+        <option value="">＋ 连到…（也可以从节点右侧圆点拖线）</option>
+        {project.screens
+          .filter((x) => x.id !== s.id)
+          .map((x) => (
+            <option key={x.id} value={x.id}>{x.kind === 'overlay' ? '◱ ' : '▯ '}{x.name}</option>
+          ))}
+        {project.conditions.map((c) => (
+          <option key={c.id} value={c.id}>◇ {c.label}</option>
+        ))}
+      </select>
+      {project.entryId === s.id && <div className="insp-hint">▶ 这是入口页面</div>}
       <div className="insp-actions">
         <button className="btn sm" onClick={() => openScreen(s.id)}>编辑布局</button>
         {s.id !== project.entryId && s.kind === 'page' && <button className="btn ghost sm" onClick={() => patch([{ op: 'setEntry', id: s.id }])}>设为入口</button>}

@@ -5,7 +5,7 @@ import { AiPanel } from './panels/AiPanel'
 import { Inspector } from './panels/Inspector'
 import { Sidebar } from './panels/Sidebar'
 import { TopBar } from './panels/TopBar'
-import { findParent, removeFromTree } from './model/elements'
+import { findParent, removeFromTree, starterRoot } from './model/elements'
 import { useStore } from './store'
 
 function useShortcuts() {
@@ -57,6 +57,10 @@ function useShortcuts() {
 function FlowToolbar() {
   const showSelf = useStore((s) => s.showSelf)
   const setShowSelf = useStore((s) => s.setShowSelf)
+  const starter = (kind: 'page' | 'overlay', name: string) => {
+    const p = useStore.getState().project()
+    return starterRoot(p.device, kind, name, p.name)
+  }
   const add = (op: Parameters<ReturnType<typeof useStore.getState>['patch']>[0][number], kind: 'screen' | 'cond') => {
     const st = useStore.getState()
     st.patch([op])
@@ -65,10 +69,10 @@ function FlowToolbar() {
   }
   return (
     <div className="float-bar">
-      <button className="btn ghost sm" onClick={() => add({ op: 'addScreen', screen: { id: '', name: '新页面' } }, 'screen')}>
+      <button className="btn ghost sm" onClick={() => add({ op: 'addScreen', screen: { id: '', name: '新页面', states: [{ id: 'default', name: '默认', root: starter('page', '新页面') }] } }, 'screen')}>
         ▯ 页面
       </button>
-      <button className="btn ghost sm" onClick={() => add({ op: 'addScreen', screen: { id: '', name: '新弹窗', kind: 'overlay', overlayType: 'modal' } }, 'screen')}>
+      <button className="btn ghost sm" onClick={() => add({ op: 'addScreen', screen: { id: '', name: '新弹窗', kind: 'overlay', overlayType: 'modal', states: [{ id: 'default', name: '默认', root: starter('overlay', '新弹窗') }] } }, 'screen')}>
         ◱ 浮层
       </button>
       <button className="btn ghost sm" onClick={() => add({ op: 'addCondition', condition: { id: '', label: '条件？' } }, 'cond')}>

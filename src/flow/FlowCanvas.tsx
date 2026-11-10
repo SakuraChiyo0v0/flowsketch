@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { checkProject } from '../model/check'
 import type { Transition } from '../model/types'
 import { useProject, useStore } from '../store'
-import { autoLayout } from './autoLayout'
+import { autoLayout, nodeHeight, nodeSize } from './autoLayout'
 import { ConditionNode, ScreenNode } from './nodes'
 
 const nodeTypes = { screen: ScreenNode, condition: ConditionNode }
@@ -122,8 +122,21 @@ function Inner() {
         const positions = { ...p.positions }
         if (allMissing) Object.assign(positions, pos)
         else {
-          // place new nodes relative to the layout, shifted so they don't overlap kept nodes
-          for (const id of missing) positions[id] = pos[id] ?? { x: 0, y: 0 }
+          // new nodes: put each next to the first node that links to it, else in the
+          // current viewport centre; then nudge down until it doesn't overlap anything
+          const box = (id: string, at: { x: number; y: number }) => ({ ...at, w: nodeSize(p, id).w, h: nodeHeight(p, id) })
+          const hits = (a: ReturnType<typeof box>) =>
+            Object.entries(positions).some(([oid, o]) => {
+              const b = box(oid, o)
+              return a.x < b.x + b.w + 30 && b.x < a.x + a.w + 30 && a.y < b.y + b.h + 30 && b.y < a.y + a.h + 30
+            })
+          const vp = rf.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+          for (const id of missing) {
+            const src = p.transitions.find((t) => t.to === id && positions[t.from])
+            let at = src ? { x: positions[src.from].x + nodeSize(p, src.from).w + 120, y: positions[src.from].y } : { x: vp.x - nodeSize(p, id).w / 2, y: vp.y - nodeHeight(p, id) / 2 }
+            for (let i = 0; i < 40 && hits(box(id, at)); i++) at = { x: at.x, y: at.y + 60 }
+            positions[id] = at
+          }
         }
         return { ...p, positions }
       }, false)
