@@ -1,7 +1,7 @@
 import { useStore } from '../store'
-import { chatJson } from './client'
+import { chatJson, progressHint } from './client'
 import { featuresPrompt, featuresToOps, flowsPrompt, flowsToOps, layoutPrompt, layoutToOps, sitemapPrompt, sitemapToOps, STEPS, type StepKey } from './prompts'
-import { relayout } from '../flow/autoLayout'
+import { relayout } from '../flow/relayout'
 import type { PatchOp } from '../model/types'
 
 let controller: AbortController | null = null
@@ -31,17 +31,19 @@ export async function runStep(key: StepKey, opts: { screenIds?: string[] } = {})
   const st = useStore.getState()
   const ai = st.ai
   const n = STEPS.find((s) => s.key === key)!.n
-  const signal = begin(`第 ${n} 步：${STEPS[n - 1].name}`)
+  const label = `第 ${n} 步：${STEPS[n - 1].name}`
+  const signal = begin(label)
+  const onProgress = (t: string) => useStore.getState().setBusy(`${label} · 已收到 ${progressHint(t)}`)
   try {
     if (key === 'features') {
-      const ops = await chatJson(ai, featuresPrompt(st.project()), featuresToOps, { signal })
+      const ops = await chatJson(ai, featuresPrompt(st.project()), featuresToOps, { signal, onProgress })
       commit(ops, 1)
       return `已生成 ${useStore.getState().project().features.length} 个功能点`
     }
     if (key === 'sitemap') {
       // regenerating the structure replaces pages and everything that depends on them
       const p = { ...st.project(), screens: [], transitions: [], conditions: [], entryId: undefined }
-      const ops = await chatJson(ai, sitemapPrompt(p), (v) => sitemapToOps(v, p), { signal })
+      const ops = await chatJson(ai, sitemapPrompt(p), (v) => sitemapToOps(v, p), { signal, onProgress })
       useStore.getState().update((x) => ({ ...x, screens: [], transitions: [], conditions: [], positions: {}, entryId: undefined, guideStep: Math.min(x.guideStep, 1) }))
       const errs = commit(ops, 2)
       await relayout()
@@ -50,7 +52,7 @@ export async function runStep(key: StepKey, opts: { screenIds?: string[] } = {})
     if (key === 'flows') {
       // regenerate from a clean graph so repeated runs don't pile up edges
       const base = { ...st.project(), transitions: [], conditions: [] }
-      const ops = await chatJson(ai, flowsPrompt(base), flowsToOps, { signal })
+      const ops = await chatJson(ai, flowsPrompt(base), (v) => flowsToOps(v, base), { signal, onProgress, maxTokens: 12000 })
       useStore.getState().update((x) => {
         const positions = { ...x.positions }
         for (const c of x.conditions) delete positions[c.id]
@@ -66,11 +68,14 @@ export async function runStep(key: StepKey, opts: { screenIds?: string[] } = {})
     let done = 0
     let failed = 0
     const queue = [...targets]
+    const active = new Set<string>()
+    const show = () => useStore.getState().setBusy(`第 4 步：生成布局 · 已完成 ${done + failed}/${targets.length}${active.size ? ` · 正在生成 ${[...active].join('、')}` : ''}`)
     const worker = async () => {
       while (queue.length) {
         if (signal.aborted) return
         const s = queue.shift()!
-        useStore.getState().setBusy(`第 4 步：生成布局 ${done + failed + 1}/${targets.length}「${s.name}」`)
+        active.add(s.name)
+        show()
         try {
           const cur = useStore.getState().project()
           const allowed = cur.screens.find((x) => x.id === s.id)?.states.map((x) => x.id) ?? []
@@ -81,10 +86,14 @@ export async function runStep(key: StepKey, opts: { screenIds?: string[] } = {})
           if (signal.aborted) return
           console.warn('layout failed', s.id, e)
           failed++
+        } finally {
+          active.delete(s.name)
+          show()
         }
       }
     }
-    await Promise.all([worker(), worker(), worker()])
+    // the gateway handles parallel requests well; per-request latency dominates
+    await Promise.all(Array.from({ length: Math.min(5, targets.length) }, worker))
     if (done && targets.length === p.screens.length) useStore.getState().update((x) => ({ ...x, guideStep: Math.max(x.guideStep, 4) }), false)
     return `已生成 ${done} 个页面的布局${failed ? `，${failed} 个失败（可单独重试）` : ''}`
   } finally {

@@ -16,9 +16,17 @@ export interface Box {
 const num = (v: unknown, d: number) => (typeof v === 'number' && isFinite(v) ? v : typeof v === 'string' && v.trim() !== '' && !isNaN(+v) ? +v : d)
 
 /** Approximate text width (CJK chars are wider). */
+/** Approximate text width (calibrated against PingFang / YaHei at weight 500). */
 export function textWidth(s: string, size = 13) {
   let w = 0
-  for (const ch of s) w += /[⺀-￿]/.test(ch) ? size : size * 0.58
+  for (const ch of s) {
+    if (/[⺀-￿]/.test(ch)) w += size
+    else if (ch === ' ') w += size * 0.3
+    else if (/[0-9]/.test(ch)) w += size * 0.6
+    else if (/[A-Z]/.test(ch)) w += size * 0.64
+    else if (/[il.,:;'|!]/.test(ch)) w += size * 0.3
+    else w += size * 0.54
+  }
   return w
 }
 
@@ -57,7 +65,7 @@ function leafHeight(el: WElement, w: number): number {
       return num(p.lines, 2) * 14
     }
     case 'button':
-      return p.variant === 'text' ? 28 : 44
+      return p.variant === 'text' ? 28 : p.size === 'lg' ? 64 : p.size === 'sm' ? 32 : 44
     case 'input':
     case 'search':
       return 42
@@ -132,8 +140,11 @@ function leafWidth(el: WElement): number | undefined {
       return num(p.size, 40)
     case 'badge':
       return textWidth(el.label ?? '标签', 12) + 20
-    case 'button':
-      return Math.max(72, textWidth(el.label ?? '按钮', 14) + 32)
+    case 'button': {
+      const fs = p.size === 'lg' ? 18 : p.size === 'sm' ? 12 : 14
+      // text width (+ icon) + padding; slight overestimate so labels don't clip
+      return Math.max(p.size === 'sm' ? 56 : 72, textWidth(el.label ?? '按钮', fs) * 1.04 + (p.icon ? fs + 6 : 0) + 32)
+    }
     case 'title': {
       const size = p.size === 'lg' ? 22 : p.size === 'sm' ? 15 : 18
       return textWidth(el.label ?? '', size) + 4
@@ -145,6 +156,8 @@ function leafWidth(el: WElement): number | undefined {
       return undefined
     case 'splitter':
       return 6
+    case 'divider':
+      return 1
     case 'pagination':
       return Math.min(9, num(p.pages, 5)) * 34 + 64
     case 'breadcrumb':
@@ -162,7 +175,9 @@ function grows(el: WElement, inRow: boolean) {
   const g = el.props?.grow
   if (g === true || g === 1 || g === 'true') return true
   if (el.type === 'spacer') return true
-  if (inRow) return leafWidth(el) === undefined && !(isContainer(el.type) && el.props?.w != null)
+  // a tree without a fixed height fills the column it sits in (sidebar pattern)
+  if (!inRow && el.type === 'tree' && el.props?.h == null) return true
+  if (inRow) return leafWidth(el) === undefined && !(isContainer(el.type) && (el.props?.w != null || intrinsicRowWidth(el) !== undefined))
   return false
 }
 
@@ -192,13 +207,32 @@ export function measure(el: WElement, w: number): number {
   return h + gap * (kids.length - 1) + pad * 2
 }
 
+/** Natural width of a row container: sum of its fixed-width children (used when a row sits inside a row). */
+function intrinsicRowWidth(el: WElement): number | undefined {
+  if (el.type !== 'row' || el.props?.grow) return undefined
+  const kids = el.children ?? []
+  if (!kids.length) return undefined
+  let total = 0
+  for (const k of kids) {
+    const w = isContainer(k.type) ? (num(k.props?.w, 0) || intrinsicRowWidth(k)) : leafWidth(k)
+    if (w === undefined || k.type === 'spacer') return undefined
+    total += w
+  }
+  return total + num(el.props?.gap, 8) * (kids.length - 1) + num(el.props?.pad, 0) * 2
+}
+
 function rowWidths(el: WElement, innerW: number): number[] {
   const kids = el.children ?? []
   const gap = num(el.props?.gap, 8)
-  const fixed = kids.map((k) => (grows(k, true) ? undefined : isContainer(k.type) ? num(k.props?.w, 0) || undefined : leafWidth(k)))
+  // nested rows of buttons/badges keep their natural width instead of splitting the space evenly
+  const fixed = kids.map((k) => (k.props?.grow ? undefined : isContainer(k.type) ? num(k.props?.w, 0) || intrinsicRowWidth(k) : grows(k, true) ? undefined : leafWidth(k)))
   const avail = innerW - gap * Math.max(0, kids.length - 1)
   let used = fixed.reduce<number>((a, b) => a + (b ?? 0), 0)
   // fixed items that overflow the row are shrunk proportionally (text gets clipped with …)
+  // dividers in a row are 1px vertical rules, not flexible space
+  kids.forEach((k, i) => {
+    if (k.type === 'divider') fixed[i] = 1
+  })
   const nonSpacerFlex = kids.filter((k, i) => fixed[i] === undefined && k.type !== 'spacer').length
   if (used > avail - nonSpacerFlex * 40 && used > 0) {
     const k = Math.max(0.2, (avail - nonSpacerFlex * 40) / used)
@@ -246,7 +280,7 @@ function place(el: WElement, x: number, y: number, w: number, h: number, depth: 
     else if (align === 'between' && kids.length > 1) g = gap + Math.max(0, (iw - total) / (kids.length - 1))
     kids.forEach((k, i) => {
       // containers, splitters and vertical-fill leaves (tree) stretch to the row height
-      const stretch = isContainer(k.type) || k.type === 'splitter' || (k.type === 'tree' && k.props?.h == null)
+      const stretch = isContainer(k.type) || k.type === 'splitter' || k.type === 'divider' || (k.type === 'tree' && k.props?.h == null)
       const kh = stretch ? Math.max(isContainer(k.type) ? measure(k, widths[i]) : 0, ih) : measure(k, widths[i])
       const ky = iy + (stretch ? 0 : Math.max(0, (ih - kh) / 2))
       place(k, cx, ky, widths[i], stretch ? ih : kh, depth + 1, out)
@@ -262,10 +296,27 @@ function place(el: WElement, x: number, y: number, w: number, h: number, depth: 
   const extra = Math.max(0, ih - used)
   if (growers.length && extra > 0) growers.forEach((m) => (m.h += extra / growers.length))
   let cy = iy
+  // column align: center/end positions fixed-width leaves horizontally; icons and
+  // avatars are always centered when the column itself is centered
+  const align = p.align
   for (const m of ms) {
-    place(m.el, ix, cy, iw, m.h, depth + 1, out)
+    const lw = isContainer(m.el.type) ? undefined : fixedLeafWidth(m.el)
+    if (lw !== undefined && lw < iw && (align === 'center' || align === 'end')) {
+      const lx = align === 'center' ? ix + (iw - lw) / 2 : ix + iw - lw
+      place(m.el, lx, cy, lw, m.h, depth + 1, out)
+    } else place(m.el, ix, cy, iw, m.h, depth + 1, out)
     cy += m.h + gap
   }
+}
+
+/** Width of leaves that look wrong stretched (icons, avatars, badges, short text) when the column is aligned. */
+function fixedLeafWidth(el: WElement): number | undefined {
+  if (['icon', 'avatar', 'badge'].includes(el.type)) return leafWidth(el)
+  if (el.type === 'title' || el.type === 'text' || el.type === 'button') {
+    if (el.props?.w != null) return num(el.props.w, 0)
+    return el.type === 'button' ? undefined : leafWidth(el)
+  }
+  return undefined
 }
 
 /** Content height (for scrolling previews taller than the device frame). */

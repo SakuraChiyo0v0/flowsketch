@@ -195,12 +195,15 @@ function ScreenProps({ s }: { s: Screen }) {
   )
 }
 
-const PROP_FIELDS: Partial<Record<WElement['type'], { key: string; label: string; kind: 'text' | 'num' | 'bool' | 'select'; options?: string[] }[]>> = {
+const DEFAULT_ON = new Set(['back', 'thumb', 'chevron', 'on'])
+
+const PROP_FIELDS:Partial<Record<WElement['type'], { key: string; label: string; kind: 'text' | 'num' | 'bool' | 'select'; options?: string[] }[]>> = {
   column: [
     { key: 'gap', label: '间距', kind: 'num' },
     { key: 'pad', label: '内边距', kind: 'num' },
     { key: 'grow', label: '占满剩余', kind: 'bool' },
     { key: 'w', label: '固定宽度', kind: 'num' },
+    { key: 'align', label: '水平对齐', kind: 'select', options: ['start', 'center', 'end'] },
     { key: 'border', label: '边框', kind: 'bool' },
     { key: 'fill', label: '灰底', kind: 'bool' },
   ],
@@ -213,6 +216,7 @@ const PROP_FIELDS: Partial<Record<WElement['type'], { key: string; label: string
   card: [
     { key: 'gap', label: '间距', kind: 'num' },
     { key: 'pad', label: '内边距', kind: 'num' },
+    { key: 'align', label: '水平对齐', kind: 'select', options: ['start', 'center', 'end'] },
     { key: 'grow', label: '占满剩余', kind: 'bool' },
   ],
   header: [
@@ -226,7 +230,9 @@ const PROP_FIELDS: Partial<Record<WElement['type'], { key: string; label: string
   title: [{ key: 'size', label: '字号', kind: 'select', options: ['lg', 'md', 'sm'] }],
   text: [{ key: 'lines', label: '占位行数', kind: 'num' }],
   button: [
-    { key: 'variant', label: '样式', kind: 'select', options: ['primary', 'secondary', 'text'] },
+    { key: 'variant', label: '样式', kind: 'select', options: ['primary', 'secondary', 'text', 'danger'] },
+    { key: 'size', label: '尺寸', kind: 'select', options: ['md', 'sm', 'lg'] },
+    { key: 'icon', label: '图标', kind: 'select', options: ['', ...iconNames()] },
     { key: 'grow', label: '撑满', kind: 'bool' },
   ],
   image: [
@@ -344,7 +350,12 @@ function ElementProps({ el, screen, stateId }: { el: WElement; screen: Screen; s
         return (
           <Field key={f.key} label={f.label}>
             {f.kind === 'bool' ? (
-              <input type="checkbox" checked={v === true || v === 'true' || (v === undefined && ((f.key === 'back' || f.key === 'thumb' || f.key === 'chevron' || f.key === 'on') && el.type !== 'column'))} onChange={(e) => setProp(f.key, e.target.checked)} />
+              <input
+                type="checkbox"
+                // these props default to "on" in the painter when unset
+                checked={v === undefined ? DEFAULT_ON.has(f.key) : v === true || v === 'true'}
+                onChange={(e) => setProp(f.key, e.target.checked)}
+              />
             ) : f.kind === 'select' ? (
               <select value={String(v ?? '')} onChange={(e) => setProp(f.key, e.target.value)}>
                 {f.options!.map((o) => (

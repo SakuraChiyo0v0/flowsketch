@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { relayout } from '../flow/autoLayout'
+import { relayout } from '../flow/relayout'
 import { exportFlow, exportJson, exportPages, exportSpec } from '../export/exporters'
 import type { Project } from '../model/types'
 import { DEVICE_KINDS, DEVICES } from '../model/types'

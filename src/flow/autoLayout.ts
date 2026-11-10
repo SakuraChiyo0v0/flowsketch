@@ -1,6 +1,5 @@
 import ELK from 'elkjs/lib/elk.bundled.js'
 import type { Project } from '../model/types'
-import { useStore } from '../store'
 
 const elk = new ELK()
 
@@ -62,7 +61,49 @@ export async function autoLayout(p: Project): Promise<Record<string, { x: number
   const res = await elk.layout(graph)
   const out: Record<string, { x: number; y: number }> = {}
   for (const c of res.children ?? []) out[c.id] = { x: c.x ?? 0, y: c.y ?? 0 }
-  return wrapTallLayers(p, out)
+  return compactY(p, wrapTallLayers(p, out))
+}
+
+/**
+ * ELK's node placement can leave large vertical gaps (e.g. one node 1000px above the
+ * rest). Within each column, keep the order but close gaps larger than `maxGap`.
+ */
+function compactY(p: Project, pos: Record<string, { x: number; y: number }>) {
+  const ids = Object.keys(pos)
+  if (!ids.length) return pos
+  const cols = new Map<number, string[]>()
+  for (const id of ids) {
+    const x = Math.round(pos[id].x / 20)
+    cols.set(x, [...(cols.get(x) ?? []), id])
+  }
+  // global vertical center to align columns around
+  const centers: number[] = []
+  const out: Record<string, { x: number; y: number }> = {}
+  const maxGap = 80
+  for (const col of cols.values()) {
+    col.sort((a, b) => pos[a].y - pos[b].y)
+    let y = pos[col[0]].y
+    for (const id of col) {
+      y = Math.min(pos[id].y, y)
+      out[id] = { x: pos[id].x, y }
+      y += nodeHeight(p, id) + maxGap
+    }
+    const top = out[col[0]].y
+    const bottom = out[col.at(-1)!].y + nodeHeight(p, col.at(-1)!)
+    centers.push((top + bottom) / 2)
+  }
+  // center each column on the median center so the graph reads as one band
+  const sorted = [...centers].sort((a, b) => a - b)
+  const median = sorted[Math.floor(sorted.length / 2)]
+  for (const col of cols.values()) {
+    const top = out[col[0]].y
+    const bottom = out[col.at(-1)!].y + nodeHeight(p, col.at(-1)!)
+    const dy = median - (top + bottom) / 2
+    for (const id of col) out[id].y += dy
+  }
+  const minY = Math.min(...Object.values(out).map((v) => v.y))
+  for (const id of ids) out[id].y -= minY
+  return out
 }
 
 /**
@@ -118,9 +159,3 @@ function wrapTallLayers(p: Project, pos: Record<string, { x: number; y: number }
   return out
 }
 
-/** Re-run auto layout for the whole graph (one undoable step). */
-export async function relayout() {
-  const st = useStore.getState()
-  const pos = await autoLayout(st.project())
-  st.update((p) => ({ ...p, positions: pos }))
-}

@@ -191,7 +191,17 @@ function paintBox(b: Box): string {
       const v = p.variant ?? 'primary'
       if (v === 'text') return text(x + w / 2, y + h / 2, label, { size: 14, color: C.ink, anchor: 'middle', weight: 500, maxW: w })
       const filled = v === 'primary'
-      return rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill: filled ? C.ink : C.bg, stroke: filled ? undefined : C.line, r: 8 }) + text(x + w / 2, y + h / 2, label, { size: 14, color: filled ? C.bg : C.ink, anchor: 'middle', weight: 500, maxW: w - 16 })
+      const danger = v === 'danger'
+      const fs = p.size === 'lg' ? 18 : p.size === 'sm' ? 12 : 14
+      const ic = p.icon ? String(p.icon) : ''
+      const tw = Math.min(textWidth(label, fs), w - 16 - (ic ? fs + 6 : 0))
+      const startX = x + w / 2 - (tw + (ic ? fs + 6 : 0)) / 2
+      const col = filled ? C.bg : danger ? '#b91c1c' : C.ink
+      return (
+        rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill: filled ? C.ink : C.bg, stroke: filled ? undefined : danger ? '#fca5a5' : C.line, r: p.size === 'lg' ? 14 : 8 }) +
+        (ic ? icon(ic, startX, y + h / 2 - fs / 2 - 1, fs + 2, col) : '') +
+        text(ic ? startX + fs + 6 : x + w / 2, y + h / 2, label, { size: fs, color: col, anchor: ic ? undefined : 'middle', weight: 500, maxW: w - 16 - (ic ? fs + 6 : 0) })
+      )
     }
     case 'input':
       return rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill: C.bg, stroke: C.line, r: 8 }) + text(x + 12, y + h / 2, label || '请输入', { size: 13, color: C.line, maxW: w - 24 })
@@ -260,6 +270,8 @@ function paintBox(b: Box): string {
       return rect(x + 0.5, y + h / 2 - 9, 18, 18, { fill: on ? C.ink : C.bg, stroke: C.line, r: 4 }) + (on ? icon('check', x + 2, y + h / 2 - 7, 14, C.bg) : '') + text(x + 28, y + h / 2, label, { size: 14, maxW: w - 30 })
     }
     case 'divider':
+      // vertical when it sits in a row (1px wide, full height)
+      if (w <= 2 && h > 2) return `<line x1="${x + 0.5}" y1="${y}" x2="${x + 0.5}" y2="${y + h}" stroke="${C.soft}"/>`
       return `<line x1="${x}" y1="${y + 0.5}" x2="${x + w}" y2="${y + 0.5}" stroke="${C.soft}"/>`
     case 'spacer':
       return ''

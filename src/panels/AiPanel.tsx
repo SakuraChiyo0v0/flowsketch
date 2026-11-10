@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { nanoid } from 'nanoid'
-import { chatJson } from '../ai/client'
+import { chatJson, progressHint } from '../ai/client'
 import { chatPrompt, parseChat, STEPS, type StepKey } from '../ai/prompts'
 import { beginAi, cancelAi, runAll, runStep } from '../ai/runSteps'
 import { checkProject, type Issue } from '../model/check'
@@ -8,7 +8,7 @@ import { applyPatch, describeOp } from '../model/patch'
 import type { ChatMessage } from '../model/types'
 import { DEVICE_KINDS, DEVICES } from '../model/types'
 import { useProject, useStore } from '../store'
-import { relayout } from '../flow/autoLayout'
+import { relayout } from '../flow/relayout'
 
 function errMsg(e: unknown) {
   if ((e as Error)?.name === 'AbortError') return '已取消'
@@ -178,7 +178,7 @@ function Chat({ pending, clearPending }: { pending?: string | null; clearPending
       const history = cur.chat.slice(-10).map((c) => ({ role: c.role, content: c.role === 'assistant' ? JSON.stringify({ reply: c.text, summary: c.proposal?.summary ?? '', ops: [] }) : c.text }))
       const scr = cur.screens.find((s) => s.id === screenId)
       const focus = view === 'page' && scr ? `页面「${scr.name}」(id: ${scr.id}) 的状态 ${stateId}` : undefined
-      const res = await chatJson(st.ai, chatPrompt(cur, history, focus), parseChat, { signal, maxTokens: 12000 })
+      const res = await chatJson(st.ai, chatPrompt(cur, history, focus), parseChat, { signal, maxTokens: 16000, onProgress: (t) => useStore.getState().setBusy(`AI 正在准备修改 · 已收到 ${progressHint(t)}`) })
       const am: ChatMessage = {
         id: nanoid(8),
         role: 'assistant',
@@ -292,6 +292,31 @@ function LogicCheck({ onAskAi }: { onAskAi: (text: string) => void }) {
   )
 }
 
+function BusyBar({ text }: { text: string }) {
+  // restart the timer whenever the phase (text before " · ") changes
+  const phase = text.split(' · ')[0]
+  const [start, setStart] = useState(() => Date.now())
+  const [lastPhase, setLastPhase] = useState(phase)
+  if (phase !== lastPhase) {
+    setLastPhase(phase)
+    setStart(Date.now())
+  }
+  const [now, setNow] = useState(start)
+  useEffect(() => {
+    const iv = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(iv)
+  }, [])
+  const sec = Math.round((now - start) / 1000)
+  return (
+    <div className="busy">
+      <span className="spin" />
+      <span>{text}</span>
+      <span className="elapsed">{sec >= 60 ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : `${sec}s`}</span>
+      <button className="link-btn" onClick={cancelAi}>取消</button>
+    </div>
+  )
+}
+
 export function AiPanel() {
   const [tab, setTab] = useState<'guide' | 'chat' | 'check'>('guide')
   const project = useProject()
@@ -300,10 +325,12 @@ export function AiPanel() {
   const warn = issues.filter((i) => i.level !== 'info').length
   const [pending, setPending] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (project.screens.length && project.guideStep >= 3 && tab === 'guide' && project.chat.length) setTab('chat')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.id])
+  // on project switch: unfinished projects open on the guide, finished ones on chat
+  const [lastProject, setLastProject] = useState(project.id)
+  if (lastProject !== project.id) {
+    setLastProject(project.id)
+    setTab(project.guideStep < 4 ? 'guide' : 'chat')
+  }
 
   return (
     <div className="ai-panel">
@@ -316,13 +343,7 @@ export function AiPanel() {
           </button>
         </div>
       </div>
-      {busy && (
-        <div className="busy">
-          <span className="spin" />
-          <span>{busy}</span>
-          <button className="link-btn" onClick={cancelAi}>取消</button>
-        </div>
-      )}
+      {busy && <BusyBar text={busy} />}
       <div className="ai-body">
         {tab === 'guide' && <Guide key={project.id} />}
         {tab === 'chat' && <Chat pending={pending} clearPending={() => setPending(null)} />}

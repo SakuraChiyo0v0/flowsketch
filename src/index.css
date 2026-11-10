@@ -275,3 +275,4 @@ input, textarea, select { font: inherit; color: inherit; }
 
 .react-flow__minimap { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .legend.toggle { gap: 4px; cursor: pointer; }
+.busy .elapsed { font-variant-numeric: tabular-nums; opacity: 0.7; }

@@ -1,4 +1,4 @@
-import { ELEMENT_META, ELEMENT_TYPES } from '../model/elements'
+import { ELEMENT_META, ELEMENT_TYPES, walk } from '../model/elements'
 import type { PatchOp, Project } from '../model/types'
 import { DEFAULT_STATE, DEVICES } from '../model/types'
 
@@ -25,7 +25,18 @@ function elementDoc() {
 
 function libraryDoc(p: Project) {
   if (!p.library.length) return '（无）'
-  return p.library.map((c) => `- ${c.id}「${c.name}」：${c.description ?? ''}。用法 {"type":"use","component":"${c.id}","label":"可选覆盖文字"}`).join('\n')
+  return p.library
+    .map((c) => {
+      const slots: string[] = []
+      walk(c.template, (n) => {
+        if (n !== c.template && n.label != null && !['column', 'row', 'card'].includes(n.type)) slots.push(`${n.type}「${n.label}」`)
+      })
+      const usage = slots.length
+        ? `{"type":"use","component":"${c.id}","labels":[${slots.map(() => '"…"').join(',')}]}，labels 依次替换：${slots.join('、')}（必须替换成实际内容，不要保留占位文字）`
+        : `{"type":"use","component":"${c.id}"}`
+      return `- ${c.id}「${c.name}」：${c.description ?? ''}。用法 ${usage}`
+    })
+    .join('\n')
 }
 
 const LAYOUT_RULES = `布局规则：
@@ -156,12 +167,12 @@ export function flowsPrompt(p: Project) {
       content: `${projectSummary(p, { layouts: true })}
 
 第 3 步：设计交互流程。用连线描述页面之间怎么走，重点是完整的操作逻辑而不是只有一条主路径，但要克制，让流程图一眼能看懂：
-- 只在真正影响去向的业务决策处加判断节点（菱形），如「已登录？」「支付成功？」「课程已满？」。判断节点总数不超过页面数的一半，最多 8 个。
+- 在真正影响去向的业务决策处加判断节点（菱形），如「已登录？」「支付成功？」「已绑定？」「课程已满？」。通常有 2-6 个，最多 8 个；需求里提到的条件（超时、失败、权限、是否绑定等）都应该体现为判断或出错路径。
 - 不要为加载成功/失败、有无数据这类页面内状态加判断节点，直接用 setState 连线或在 toState 上表达。
 - 判断节点的每条出线用 branch 标「是」/「否」。
 - 连线总数控制在页面数的 2.5 倍以内；同一对页面之间最多 2 条。
 - 每个页面状态都要说明怎么进入（例如 toState:"empty"），出错状态要有重试或取消的出路（kind:"error"）。
-- 返回/取消用 kind:"back"。浮层用 action:"open" 打开，用 action:"close"（from 和 to 都是浮层自身）关闭。
+- 返回/取消必须用 kind:"back"（例如子页面返回首页）；它们在流程图上画成灰色虚线，与主流程区分。浮层用 action:"open" 打开，用 action:"close"（from 和 to 都是浮层自身）关闭。
 - 同一页面内状态切换用 action:"setState"，from 和 to 相同，用 fromState/toState。
 - 如果已列出可交互元素，用 elementId 指明哪个元素触发。
 - 不要重复已经存在的连线；只输出需要新增的部分。
@@ -173,12 +184,26 @@ export function flowsPrompt(p: Project) {
   ]
 }
 
-export function flowsToOps(v: unknown): PatchOp[] {
+const BACK_RE = /^(返回|取消|关闭|退出|后退|返回上一页|返回首页|返回列表|稍后再说|暂不)/
+
+export function flowsToOps(v: unknown, p?: Project): PatchOp[] {
   const o = v as { conditions?: { id: string; label: string }[]; transitions?: Record<string, unknown>[] }
   if (!Array.isArray(o?.transitions)) throw new Error('缺少 transitions 数组')
   const ops: PatchOp[] = []
   for (const c of o.conditions ?? []) if (c?.label) ops.push({ op: 'addCondition', condition: { id: String(c.id ?? ''), label: String(c.label) } })
-  for (const t of o.transitions) if (t?.from && t?.to) ops.push({ op: 'addTransition', transition: t as never })
+  for (const raw of o.transitions) {
+    if (!raw?.from || !raw?.to) continue
+    const t = { ...raw } as Record<string, unknown>
+    // models often forget kind:"back" on obvious back/cancel edges; infer it so the
+    // canvas can draw them as secondary paths
+    if (!t.kind && typeof t.label === 'string' && BACK_RE.test(t.label.trim())) t.kind = 'back'
+    if (!t.kind && t.trigger === 'back') t.kind = 'back'
+    if (!t.kind && p) {
+      const from = p.screens.find((s) => s.id === t.from)
+      if (from?.kind === 'overlay' && t.to !== t.from && !t.elementId && /关闭|取消/.test(String(t.label ?? ''))) t.kind = 'back'
+    }
+    ops.push({ op: 'addTransition', transition: t as never })
+  }
   return ops
 }
 
