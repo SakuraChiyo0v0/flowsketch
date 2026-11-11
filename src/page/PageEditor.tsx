@@ -22,6 +22,26 @@ export function PageEditor() {
   const [zoom, setZoom] = useState(1)
   const stageRef = useRef<HTMLDivElement>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
+  // entry/exit columns: on by default when there's room, toggled from the toolbar
+  const [ioPref, setIoPref] = useState<boolean | null>(null)
+  const [stageW, setStageW] = useState(0)
+  // the stage mounts only once a screen is open, so observe via a callback ref
+  const roRef = useRef<ResizeObserver | null>(null)
+  const setStage = (el: HTMLDivElement | null) => {
+    stageRef.current = el
+    roRef.current?.disconnect()
+    roRef.current = null
+    if (!el) return
+    const ro = new ResizeObserver(() => setStageW(el.clientWidth))
+    ro.observe(el)
+    roRef.current = ro
+  }
+  // hidden until the stage is measured, then shown only when there's room for both columns
+  const showIo = ioPref ?? stageW >= 760
+  // the stage is re-created when switching screens; keep the measurement current
+  useEffect(() => {
+    if (stageRef.current) setStageW(stageRef.current.clientWidth)
+  }, [screenId])
 
   const screen = project.screens.find((s) => s.id === screenId)
   const state = screen?.states.find((s) => s.id === stateId) ?? screen?.states[0]
@@ -29,13 +49,13 @@ export function PageEditor() {
   const painted = useMemo(() => (state ? paintTree(state.root, fs.w, fs.h) : null), [state, fs.w, fs.h])
 
   // fit the device frame into the visible stage whenever the screen or device changes
-  const fitKey = `${screenId}|${project.device}`
+  const fitKey = `${screenId}|${project.device}|${showIo}|${Math.round(stageW / 80)}`
   useEffect(() => {
     const el = stageRef.current
     if (!el) return
     const availH = el.clientHeight - 64
-    // stage padding 48 + 4 flex gaps of 24 + two io columns
-    const availW = el.clientWidth - 2 * 150 - 48 - 4 * 24 - 8
+    // stage padding 48 + flex gaps of 24 + (when shown) two io columns
+    const availW = el.clientWidth - 48 - 8 - (showIo ? 2 * 150 + 4 * 24 : 2 * 24)
     const dev = DEVICE_SIZE[project.device]
     // mobile: fit height; web: fit width (pages are wide, vertical scroll is fine);
     // desktop: fit the whole window (it has a fixed size, nothing scrolls)
@@ -123,6 +143,9 @@ export function PageEditor() {
             </option>
           ))}
         </select>
+        <button className={`btn ghost sm ${showIo ? 'on' : ''}`} title="显示这个页面从哪里进入、可以去哪里" onClick={() => setIoPref(!showIo)}>
+          ⇄ 进出
+        </button>
         <div className="state-tabs">
           {screen.states.map((st) => (
             <button key={st.id} className={`tab ${st.id === state.id ? 'on' : ''} ${/失败|错误|error|fail/i.test(st.name + st.id) ? 'err' : ''}`} onClick={() => openScreen(screen.id, st.id)}>
@@ -151,8 +174,8 @@ export function PageEditor() {
         <button className="btn ghost sm" onClick={() => setZoom((z) => Math.min(2, +(z + 0.1).toFixed(1)))}>＋</button>
       </div>
 
-      <div className="page-stage" ref={stageRef}>
-        <div className="io-col">
+      <div className="page-stage" ref={setStage}>
+        {showIo && <div className="io-col">
           <div className="io-title">从这里进入</div>
           {screen.id === project.entryId && <div className="io-none">▶ 入口页</div>}
           {incoming.length === 0 && screen.id !== project.entryId && <div className="io-none">无</div>}
@@ -168,7 +191,7 @@ export function PageEditor() {
               {new Set(backIns.map((t) => t.from)).size > 3 ? ` 等 ${new Set(backIns.map((t) => t.from)).size} 处` : ''}返回
             </div>
           )}
-        </div>
+        </div>}
 
         <div className={`device-wrap ${screen.kind === 'overlay' ? `ov-${screen.overlayType}` : ''}`}>
           {screen.kind === 'overlay' && <div className="ov-tag">{OVERLAY_LABEL[screen.overlayType ?? 'modal']}</div>}
@@ -212,7 +235,7 @@ export function PageEditor() {
           </div>
         </div>
 
-        <div className="io-col">
+        {showIo && <div className="io-col">
           <div className="io-title">从这里离开</div>
           {outgoing.length === 0 && <div className="io-none">无出口</div>}
           {outgoing.map((t) => {
@@ -233,7 +256,7 @@ export function PageEditor() {
               </button>
             )
           })}
-        </div>
+        </div>}
       </div>
     </div>
   )

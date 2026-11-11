@@ -2,8 +2,7 @@ import { ErrorBoundary } from './ErrorBoundary'
 import { useEffect } from 'react'
 import { FlowCanvas } from './flow/FlowCanvas'
 import { PageEditor } from './page/PageEditor'
-import { AiPanel } from './panels/AiPanel'
-import { Inspector } from './panels/Inspector'
+import { RightPanel } from './panels/RightPanel'
 import { Sidebar } from './panels/Sidebar'
 import { TopBar } from './panels/TopBar'
 import { findParent, removeFromTree, starterRoot } from './model/elements'
@@ -143,14 +142,9 @@ export default function App() {
             )}
           </ErrorBoundary>
         </section>
-        <aside className="right">
-          <ErrorBoundary compact name="属性">
-            <Inspector />
-          </ErrorBoundary>
-          <ErrorBoundary compact name="AI 面板">
-            <AiPanel />
-          </ErrorBoundary>
-        </aside>
+        <ErrorBoundary compact name="右侧面板">
+          <RightPanel />
+        </ErrorBoundary>
       </div>
       {toast && <div className="toast">{toast}</div>}
     </div>

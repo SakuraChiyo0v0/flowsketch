@@ -246,7 +246,22 @@ function Inner() {
     >
       <Background gap={20} size={1.2} color="#d4d4d4" />
       <Controls showInteractive={false} />
-      <MiniMap pannable zoomable style={{ width: 180, height: 110 }} nodeColor={(n) => (n.type === 'condition' ? '#fbbf24' : '#a3a3a3')} nodeStrokeWidth={0} maskColor="rgba(240,240,240,0.7)" />
+      {/* only worth the space on larger graphs */}
+      {nodes.length > 8 && (
+        <MiniMap
+          pannable
+          zoomable
+          position="bottom-right"
+          style={{ width: 168, height: 104 }}
+          bgColor="#ffffff"
+          nodeColor={(n) => (n.type === 'condition' ? '#f59e0b' : n.selected ? '#2563eb' : '#737373')}
+          nodeBorderRadius={4}
+          nodeStrokeWidth={0}
+          maskColor="rgba(115,115,115,0.12)"
+          maskStrokeColor="#2563eb"
+          maskStrokeWidth={2}
+        />
+      )}
     </ReactFlow>
   )
 }

@@ -267,7 +267,8 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       {view === 'flow' ? <PagesTree /> : <Layers />}
-      <Palette />
+      {/* element palette only makes sense while editing a page */}
+      {view === 'page' && <Palette />}
     </aside>
   )
 }

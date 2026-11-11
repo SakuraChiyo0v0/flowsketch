@@ -28,8 +28,8 @@ input, textarea, select { font: inherit; color: inherit; }
 .app { display: flex; flex-direction: column; height: 100%; }
 .main { flex: 1; display: flex; min-height: 0; }
 .center { flex: 1; position: relative; min-width: 0; background: var(--bg2); }
-.sidebar { width: 236px; border-right: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
-.right { width: 340px; border-left: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
+.sidebar { width: 248px; border-right: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
+.right-panel { width: 380px; border-left: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
 .spacer { flex: 1; }
 
 /* top bar */
@@ -109,7 +109,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .lib-desc { color: var(--mid); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* right panels */
-.inspector { border-bottom: 1px solid var(--line); max-height: 48%; overflow: auto; flex-shrink: 0; }
+.inspector { flex: 1; overflow: auto; min-height: 0; }
 .panel-head { padding: 12px 14px 8px; font-weight: 600; position: sticky; top: 0; background: var(--bg); z-index: 1; }
 .tabs-head { padding: 10px 10px 6px; }
 .insp-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 8px; }
@@ -296,3 +296,47 @@ input, textarea, select { font: inherit; color: inherit; }
 .err-hint { font-size: 11px; color: var(--mid); }
 .row-between { display: flex; justify-content: space-between; align-items: center; }
 .sample-data textarea { width: 100%; font-size: 12px; line-height: 1.6; }
+
+/* right panel: one tab at a time */
+.right-tabs { display: flex; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.right-tabs button { border: none; background: none; padding: 8px 12px 9px; font-weight: 600; color: var(--mid); border-bottom: 2px solid transparent; margin-bottom: -1px; display: flex; align-items: center; gap: 6px; }
+.right-tabs button.on { color: var(--ink); border-bottom-color: var(--ink); }
+.right-tabs .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.right-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.right-body > .inspector, .right-body > .ai-panel { flex: 1; min-height: 0; }
+.ai-panel .tabs-head { padding: 12px 14px 8px; position: static; }
+.ai-panel .tabs-head .seg { width: 100%; }
+.ai-panel .tabs-head .seg button { flex: 1; }
+
+/* breathing room */
+.insp-body { padding: 4px 18px 20px; gap: 12px; }
+.insp-empty { padding: 16px 18px; font-size: 13px; }
+.guide { padding: 6px 18px 20px; gap: 14px; }
+.step { padding: 10px 12px; }
+.chat { padding: 0 14px 14px; }
+.chat-list { gap: 14px; }
+.side-head { padding: 14px 14px 8px; }
+.tree-row { padding: 6px 8px; }
+.tree-row.sub { padding-top: 4px; padding-bottom: 4px; }
+.palette { max-height: 50%; }
+
+/* narrower windows: shrink the side panels before the canvas */
+@media (max-width: 1400px) {
+  .sidebar { width: 220px; }
+  .right-panel { width: 340px; }
+}
+@media (max-width: 1150px) {
+  .sidebar { width: 196px; }
+  .right-panel { width: 300px; }
+}
+
+/* canvas chrome: give the floating bars some margin and a lighter look */
+.float-bar { top: 16px; left: 16px; padding: 5px 6px; gap: 2px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06); }
+.float-bar .btn, .float-bar button { padding: 5px 10px; }
+.react-flow__controls { margin: 16px !important; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06) !important; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.react-flow__controls-button { border-bottom-color: var(--line) !important; width: 30px !important; height: 30px !important; }
+.react-flow__minimap { margin: 16px !important; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06); }
+
+/* side panels keep their width; the canvas takes what's left */
+.sidebar, .right-panel { flex-shrink: 0; }
+.center { min-width: 0; overflow: hidden; }
