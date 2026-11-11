@@ -1,4 +1,4 @@
-import { findElement } from './elements'
+import { findElement, walk } from './elements'
 import type { PatchOp, Project } from './types'
 import { DEFAULT_STATE } from './types'
 
@@ -220,6 +220,68 @@ const PERMISSIONS: { need: RegExp; perm: string }[] = [
 ]
 const PERM_HANDLED = /权限|授权|允许|开启|去设置|未开启|已关闭/
 
+/** Things a user sets up, and the words that show the design lets them undo it. */
+const UNDOABLE: { make: RegExp; undo: RegExp; what: string; undoName: string }[] = [
+  { make: /绑定(?!失败)|关联设备|添加家人|添加成员/, undo: /解除绑定|解绑|取消绑定|移除成员|删除成员|取消关联/, what: '绑定', undoName: '解除绑定' },
+  { make: /订阅|开通会员|自动续费|包月/, undo: /取消订阅|退订|关闭自动续费|取消续费/, what: '订阅', undoName: '取消订阅' },
+  { make: /关注(?!度)/, undo: /取消关注|取关/, what: '关注', undoName: '取消关注' },
+  { make: /授权登录|第三方登录|绑定账号/, undo: /解除授权|取消授权|解绑账号/, what: '授权', undoName: '解除授权' },
+  { make: /预约|报名|预订/, undo: /取消预约|取消报名|取消预订|退订/, what: '预约', undoName: '取消预约' },
+]
+
+/**
+ * A reply or confirmation made by one side, and the screen/state names that show the
+ * other side can see it come back.
+ */
+const REPLIES: { reply: RegExp; seen: RegExp; what: string }[] = [
+  { reply: /回复(?!方式)|语音回复|回信/, seen: /收到的回复|回复列表|新回复|子女回复|对方回复|留言列表|语音留言|消息/, what: '回复' },
+  { reply: /确认已服|已服药|确认服药|打卡/, seen: /打卡记录|服药记录|已服|用药记录|用药打卡/, what: '服药确认' },
+  { reply: /确认收货|已签收/, seen: /已签收|已完成|订单完成/, what: '收货确认' },
+  { reply: /审核通过|审批通过|同意申请/, seen: /审核结果|已通过|审批结果/, what: '审核结果' },
+]
+
+/** Text in a wireframe that promises something exists, and where that something should show up. */
+const PROMISES: { say: RegExp; target: RegExp; what: string }[] = [
+  { say: /(随时|可以|可在|稍后).{0,8}解除绑定|解绑/, target: /解除绑定|解绑/, what: '解除绑定' },
+  { say: /(可在|可以在|稍后在|随时在)设置/, target: /设置/, what: '设置' },
+  // "scan the QR code on the other phone": the other side needs a screen that shows one
+  { say: /扫描.{0,8}(手机|对方|父母|子女|上)的?二维码|出示二维码|展示二维码/, target: /我的二维码|显示二维码|展示二维码|出示二维码|二维码名片/, what: '对方展示的二维码' },
+  { say: /扫码|扫一扫/, target: /扫码|扫一扫|扫描/, what: '扫码' },
+  { say: /切换身份|切换账号|切换角色/, target: /切换身份|切换账号|切换角色|选择身份/, what: '切换身份' },
+  // "查看记录 ›" is usually a link on a card that already goes to its detail page; only flag the
+  // standalone promise of a history the design never shows
+  { say: /(可以|可在|随时).{0,6}查看(全部|历史)?(记录|历史)/, target: /记录|历史/, what: '记录' },
+  { say: /联系客服|在线客服/, target: /客服/, what: '客服' },
+]
+
+/**
+ * Home screens per role: pages reached right after the entry splits by role (an entry like
+ * "选择身份" whose outgoing edges go to different pages). Returns [] when there's no split.
+ */
+function roleHomes(p: Project) {
+  if (p.roles.length < 2 || !p.entryId) return []
+  // the entry itself, or a chain of single-exit screens after it (splash → role select)
+  let cur = p.entryId
+  for (let i = 0; i < 4; i++) {
+    const outs = [...new Set(p.transitions.filter((t) => t.from === cur && t.to !== cur).map((t) => t.to))]
+    const pages = outs.map((id) => p.screens.find((s) => s.id === id)).filter((s): s is Project['screens'][number] => !!s && s.kind === 'page')
+    if (pages.length >= 2) {
+      // skip pass-through pages (a permission guide that leads on to each home)
+      return pages.map((pg) => {
+        const next = [...new Set(p.transitions.filter((t) => t.from === pg.id && t.to !== pg.id).map((t) => t.to))]
+        const only = next.length === 1 ? p.screens.find((s) => s.id === next[0] && s.kind === 'page') : undefined
+        return only && /引导|权限|欢迎|介绍|guide|onboard/i.test(pg.name + pg.id) ? only : pg
+      })
+    }
+    if (outs.length !== 1) break
+    cur = outs[0]
+  }
+  return []
+}
+
+/** Controls whose behaviour should be described when a page is mostly made of them. */
+const CONTROLS = new Set(['toggle', 'checkbox', 'select', 'radio', 'slider', 'stepper'])
+
 /**
  * One side starts something the other side should receive. `receive` must match a
  * *screen or state name* (not just a button label), since a receiving side needs a place
@@ -301,7 +363,127 @@ function completenessIssues(p: Project): Issue[] {
     }
   }
 
-  // 4. shared sample data keeps generated pages consistent
+  // Which screens each side can reach. With two roles, each role usually has its own home
+  // (the entry splits by role); a page that exists but only one side can reach doesn't help
+  // the other side. Without role homes, everything counts as one side.
+  const reach = (start: string) => {
+    const seen = new Set([start])
+    const stack = [start]
+    while (stack.length) {
+      const cur = stack.pop()!
+      for (const t of p.transitions) {
+        if (t.from !== cur || seen.has(t.to)) continue
+        seen.add(t.to)
+        stack.push(t.to)
+      }
+    }
+    return seen
+  }
+  const homes = roleHomes(p)
+  const sides = homes.length >= 2 ? homes.map((h) => ({ home: h, reach: reach(h.id) })) : []
+  // text of the screens a side can reach (names + states + labels of edges between them)
+  const sideText = (r: Set<string>) =>
+    [...p.screens.filter((s) => r.has(s.id)).map((s) => [s.name, ...s.states.map((st) => st.name)].join(' ')), ...p.transitions.filter((t) => r.has(t.from)).map((t) => t.label ?? '')].join(' ')
+
+  // 4. things you can set up need a way to undo them, on every side that can set them up
+  //    (bind → unbind, subscribe → cancel)
+  for (const r of UNDOABLE) {
+    if (!r.make.test(placeText + ' ' + p.features.map((f) => f.name).join(' '))) continue
+    const groups = sides.length ? sides : [{ home: undefined, reach: new Set(p.screens.map((s) => s.id)) }]
+    const lacking = groups.filter((g) => r.make.test(sideText(g.reach)) && !r.undo.test(sideText(g.reach)))
+    // with no side-specific mention, fall back to "anywhere in the design"
+    if (!lacking.length && (sides.length || r.undo.test(designText))) continue
+    const who = lacking.length && sides.length ? `「${lacking.map((g) => g.home!.name).join('」「')}」这一侧` : '设计里'
+    out.push({
+      id: `undo-${r.what}`,
+      level: 'warning',
+      title: `有「${r.what}」但${sides.length && lacking.length ? `${lacking.map((g) => g.home!.name).join('、')}` : ''}没有「${r.undoName}」`,
+      detail: `${who}能${r.what}，却走不到${r.undoName}的入口，设置之后改不回来。`,
+      aiFix: `${who}可以「${r.what}」，但走不到「${r.undoName}」。请在这一侧能到达的地方（设置页、详情页或管理页）加上${r.undoName}的入口、确认浮层和完成后的去向。`,
+    })
+  }
+
+  // 5. a reply or confirmation should come back to the side that started it
+  for (const r of REPLIES) {
+    if (!r.reply.test(allText)) continue
+    if (sides.length) {
+      // the side that can make the reply/confirmation
+      const makers = sides.filter((g) => r.reply.test(sideText(g.reach)))
+      // the other sides should be able to see it
+      const blind = sides.filter((g) => !makers.includes(g) && !r.seen.test(sideText(g.reach)))
+      if (!makers.length || !blind.length) continue
+      out.push({
+        id: `reply-${r.what}`,
+        level: 'warning',
+        title: `「${blind.map((g) => g.home.name).join('、')}」看不到${r.what}`,
+        detail: `「${makers.map((g) => g.home.name).join('、')}」这一侧可以${sideText(makers[0].reach).match(r.reply)?.[0]}，另一侧没有页面或状态能看到它。`,
+        aiFix: `「${makers.map((g) => g.home.name).join('、')}」这一侧可以「${sideText(makers[0].reach).match(r.reply)?.[0]}」，但「${blind.map((g) => g.home.name).join('、')}」这一侧看不到。请为这一侧补上看到${r.what}的地方（列表、状态或提示）和进入它的连线。`,
+      })
+    } else if (!r.seen.test(placeText)) {
+      out.push({
+        id: `reply-${r.what}`,
+        level: 'warning',
+        title: `「${r.what}」没有回到发起方`,
+        detail: `设计里一方可以${allText.match(r.reply)?.[0]}，但发起方没有页面或状态能看到它。`,
+        aiFix: `设计里有「${allText.match(r.reply)?.[0]}」，但发起的一方看不到。请为发起方补上看到${r.what}的地方（列表、状态或提示），以及进入它的连线。`,
+      })
+    }
+  }
+
+  // 6 & 7. wireframe-level checks: text that promises an entry point, and controls with no interaction
+  // A promise made on one side has to be kept on a side that can reach it: "你可以随时在设置中解除绑定"
+  // on the parent's screen needs an unbind the parent can reach, not one only the child can.
+  const sideOf = (screenId: string) => sides.filter((g) => g.reach.has(screenId))
+  const reachable = (name: RegExp, from?: string) => {
+    const groups = from ? sideOf(from) : []
+    // a screen both sides reach (or no role split): the whole design counts
+    if (groups.length !== 1) return p.screens.some((s) => name.test([s.name, ...s.states.map((st) => st.name)].join(' '))) || p.transitions.some((t) => name.test(t.label ?? ''))
+    return name.test(sideText(groups[0].reach))
+  }
+  const promised = new Map<string, { where: string; text: string }>()
+  const dead: { screen: string; screenId: string; labels: string[] }[] = []
+  for (const s of p.screens) {
+    const wired = new Set(p.transitions.filter((t) => t.from === s.id && t.elementId).map((t) => t.elementId))
+    const deadLabels: string[] = []
+    for (const st of s.states) {
+      walk(st.root, (el) => {
+        const text = `${el.label ?? ''} ${typeof el.props?.text === 'string' ? el.props.text : ''}`
+        for (const pr of PROMISES) {
+          if (!pr.say.test(text) || promised.has(pr.what)) continue
+          // instructions about the OS ("在系统设置中允许…") aren't promises about this app
+          if (/系统设置|手机设置|系统的设置/.test(text) && pr.what === '设置') continue
+          if (!reachable(pr.target, s.id)) promised.set(pr.what, { where: `${s.name} · ${st.name}`, text: text.trim().slice(0, 40) })
+        }
+        if (CONTROLS.has(el.type) && !wired.has(el.id)) {
+          const lab = el.label || (typeof el.props?.items === 'string' ? el.props.items.split(',')[0] : '') || el.type
+          if (!deadLabels.includes(lab)) deadLabels.push(lab)
+        }
+      })
+    }
+    // only flag screens where controls are the point of the page (settings, forms), not a stray toggle
+    if (deadLabels.length >= 3 && /设置|偏好|选项|配置|提醒|通知|筛选|setting|pref|filter/i.test(s.name + s.id)) dead.push({ screen: s.name, screenId: s.id, labels: deadLabels })
+  }
+  for (const [what, at] of promised) {
+    out.push({
+      id: `promise-${what}`,
+      level: 'warning',
+      title: `文案提到「${what}」，但没有这个入口`,
+      detail: `「${at.where}」里写着“${at.text}”，设计里找不到对应的页面或操作。`,
+      aiFix: `「${at.where}」的文案写着“${at.text}”，但设计里没有${what}的入口。请补上对应的页面或操作和连线；如果不打算做，就改掉这句文案。`,
+    })
+  }
+  for (const d of dead) {
+    out.push({
+      id: `controls-${d.screenId}`,
+      level: 'info',
+      title: `「${d.screen}」的 ${d.labels.length} 个选项没有交互`,
+      detail: `${d.labels.slice(0, 4).join('、')}${d.labels.length > 4 ? ' 等' : ''}：只有样子，点了会怎样没有说明（切换后保存？立即生效？弹出选择？）。`,
+      targetId: d.screenId,
+      aiFix: `「${d.screen}」(id: ${d.screenId}) 里的选项和开关（${d.labels.join('、')}）没有交互。请为需要说明的控件加上连线：切换后页面怎样变化（setState）、需要选择的弹出选择浮层、保存成功或失败的结果。简单的开关可以合并成一条“修改设置 → 已保存”说明。`,
+    })
+  }
+
+  // 8. shared sample data keeps generated pages consistent
   if (p.screens.length >= 4 && !p.sampleData?.trim()) {
     out.push({
       id: 'no-sample-data',

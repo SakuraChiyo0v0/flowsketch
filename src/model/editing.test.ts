@@ -270,3 +270,73 @@ describe('completeness checks', () => {
     expect(p.sampleData).toBe('父母：王秀兰\n子女：林晓雨')
   })
 })
+
+describe('completeness checks: undo, replies, promises, controls', () => {
+  // two roles split at the entry; child can bind and reply, parent can only confirm
+  const twoSides = () =>
+    applyPatch(blankProject('t', '子女绑定父母，父母留言，子女回复', 'mobile'), [
+      { op: 'setFeatures', features: [{ name: '绑定' }, { name: '语音留言' }], roles: ['子女', '父母'] },
+      { op: 'addScreen', screen: { id: 'role', name: '选择身份' } },
+      { op: 'addScreen', screen: { id: 'child', name: '子女首页' } },
+      { op: 'addScreen', screen: { id: 'parent', name: '父母首页' } },
+      { op: 'addScreen', screen: { id: 'bind', name: '设备绑定' } },
+      { op: 'addScreen', screen: { id: 'confirm', name: '确认绑定' } },
+      { op: 'addScreen', screen: { id: 'msgs', name: '语音留言' } },
+      { op: 'setEntry', id: 'role' },
+      { op: 'addTransition', transition: { from: 'role', to: 'child', label: '我是子女' } },
+      { op: 'addTransition', transition: { from: 'role', to: 'parent', label: '我是父母' } },
+      { op: 'addTransition', transition: { from: 'child', to: 'bind', label: '绑定父母' } },
+      { op: 'addTransition', transition: { from: 'child', to: 'msgs', label: '语音留言' } },
+      { op: 'addTransition', transition: { from: 'msgs', to: 'msgs', label: '回复' } },
+      { op: 'addTransition', transition: { from: 'parent', to: 'confirm', label: '收到绑定请求' } },
+    ]).project
+  const titles = (p: Project) => checkProject(p).map((i) => i.title)
+
+  it('flags the side that can bind but not unbind', () => {
+    let p = twoSides()
+    expect(titles(p).some((t) => t.startsWith('有「绑定」但') && t.includes('没有「解除绑定」'))).toBe(true)
+    p = applyPatch(p, [
+      { op: 'addScreen', screen: { id: 'unbind', name: '解除绑定确认', kind: 'overlay' } },
+      { op: 'addTransition', transition: { from: 'bind', to: 'unbind', label: '解除绑定' } },
+      { op: 'addTransition', transition: { from: 'confirm', to: 'unbind', label: '解除绑定' } },
+    ]).project
+    expect(titles(p).some((t) => t.startsWith('有「绑定」但'))).toBe(false)
+  })
+
+  it('flags a reply the other side cannot see', () => {
+    let p = twoSides()
+    expect(titles(p)).toContain('「父母首页」看不到回复')
+    p = applyPatch(p, [{ op: 'addTransition', transition: { from: 'parent', to: 'msgs', label: '收听回复' } }]).project
+    expect(titles(p)).not.toContain('「父母首页」看不到回复')
+  })
+
+  it('flags text that promises an entry the design lacks', () => {
+    let p = twoSides()
+    p = applyPatch(p, [{ op: 'setLayout', screenId: 'confirm', stateId: 'default', root: { type: 'column', children: [{ type: 'text', label: '你可以随时在设置中解除绑定。' }] } }]).project
+    expect(titles(p)).toContain('文案提到「解除绑定」，但没有这个入口')
+    // an unbind only the child side reaches doesn't keep a promise made on the parent side
+    p = applyPatch(p, [
+      { op: 'addScreen', screen: { id: 'unbind', name: '解除绑定确认', kind: 'overlay' } },
+      { op: 'addTransition', transition: { from: 'bind', to: 'unbind', label: '解除绑定' } },
+    ]).project
+    expect(titles(p)).toContain('文案提到「解除绑定」，但没有这个入口')
+    p = applyPatch(p, [{ op: 'addTransition', transition: { from: 'confirm', to: 'unbind', label: '解除绑定' } }]).project
+    expect(titles(p)).not.toContain('文案提到「解除绑定」，但没有这个入口')
+  })
+
+  it('ignores instructions about OS settings', () => {
+    const p = applyPatch(twoSides(), [{ op: 'setLayout', screenId: 'bind', stateId: 'default', root: { type: 'column', children: [{ type: 'text', label: '请在系统设置中允许访问相机' }] } }]).project
+    expect(titles(p)).not.toContain('文案提到「设置」，但没有这个入口')
+  })
+
+  it('flags a settings page full of unwired controls', () => {
+    const toggles = ['免打扰', '漏服提醒', '步数提醒'].map((l, i) => ({ id: `t${i}`, type: 'toggle', label: l }))
+    let p = applyPatch(twoSides(), [
+      { op: 'addScreen', screen: { id: 'settings', name: '提醒设置' } },
+      { op: 'setLayout', screenId: 'settings', stateId: 'default', root: { type: 'column', children: toggles } },
+    ] as never).project
+    expect(titles(p)).toContain('「提醒设置」的 3 个选项没有交互')
+    p = applyPatch(p, toggles.map((t) => ({ op: 'addTransition', transition: { from: 'settings', to: 'settings', elementId: t.id, action: 'setState', label: '已保存' } })) as never).project
+    expect(titles(p).some((t) => t.includes('选项没有交互'))).toBe(false)
+  })
+})

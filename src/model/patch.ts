@@ -209,7 +209,8 @@ function applyOne(p: Project, op: PatchOp, errors: string[]): Project {
       const t = normalizeTransition(op.transition, p, errors)
       if (!t) return p
       const dup = p.transitions.find(
-        (x) => x.from === t.from && x.to === t.to && x.fromState === t.fromState && x.toState === t.toState && (x.label ?? '') === (t.label ?? '') && (x.branch ?? '') === (t.branch ?? ''),
+        // same edge from a *different* element is not a duplicate (three toggles can each "save")
+        (x) => x.from === t.from && x.to === t.to && x.fromState === t.fromState && x.toState === t.toState && (x.label ?? '') === (t.label ?? '') && (x.branch ?? '') === (t.branch ?? '') && (x.elementId ?? '') === (t.elementId ?? ''),
       )
       if (dup) return p
       return { ...p, transitions: [...p.transitions, t] }
