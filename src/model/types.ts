@@ -136,6 +136,11 @@ export interface Project {
   entryId?: string
   features: Feature[]
   roles: string[]
+  /**
+   * Shared fake data every screen should use (people, places, core records), as short
+   * "key: value" lines. Keeps generated wireframes and prototypes consistent across pages.
+   */
+  sampleData?: string
   screens: Screen[]
   conditions: Condition[]
   transitions: Transition[]
@@ -180,7 +185,8 @@ export type PatchOp =
   | { op: 'updateCondition'; id: string; label: string }
   | { op: 'removeCondition'; id: string }
   | { op: 'setEntry'; id: string }
-  | { op: 'setFeatures'; features: { name: string; description?: string }[]; roles?: string[] }
+  | { op: 'setFeatures'; features: { name: string; description?: string }[]; roles?: string[]; sampleData?: string }
+  | { op: 'setSampleData'; text: string }
   | { op: 'renameProject'; name: string }
 
 export interface DeviceMeta {

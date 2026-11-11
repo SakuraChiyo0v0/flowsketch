@@ -104,7 +104,10 @@ function applyOne(p: Project, op: PatchOp, errors: string[]): Project {
         ...p,
         features: (op.features ?? []).map((f) => ({ id: nanoid(6), name: String(f.name), description: f.description })),
         roles: op.roles ?? p.roles,
+        sampleData: op.sampleData?.trim() || p.sampleData,
       }
+    case 'setSampleData':
+      return { ...p, sampleData: op.text.trim() || undefined }
     case 'addScreen': {
       const s = op.screen
       if (!s?.name) {
@@ -302,6 +305,8 @@ export function describeOp(op: PatchOp, p: Project): string {
       return `设置入口页为「${name(op.id)}」`
     case 'setFeatures':
       return `更新功能清单（${op.features?.length ?? 0} 项）`
+    case 'setSampleData':
+      return '更新共享示例数据'
     case 'renameProject':
       return `项目改名为「${op.name}」`
   }

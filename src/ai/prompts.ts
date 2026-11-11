@@ -59,6 +59,7 @@ export function projectSummary(p: Project, opts: { layouts?: boolean } = {}) {
   if (p.brief) lines.push(`需求描述：${p.brief}`)
   if (p.roles.length) lines.push(`用户角色：${p.roles.join('、')}`)
   if (p.features.length) lines.push(`功能：\n${p.features.map((f) => `- ${f.name}${f.description ? `：${f.description}` : ''}`).join('\n')}`)
+  if (p.sampleData) lines.push(`共享示例数据（所有页面里出现的人名、地点、数据都用这里的，不要另编）：\n${p.sampleData}`)
   if (p.screens.length) {
     lines.push('页面（id｜名称｜类型｜状态）：')
     for (const s of p.screens) {
@@ -94,16 +95,18 @@ export function featuresPrompt(p: Project) {
       content: `${projectSummary(p)}
 
 第 1 步：把需求拆成用户角色和功能清单（5-10 个功能点，按重要程度排序），并给项目起一个简短名字。
+再写一份所有页面共用的示例数据 sampleData：贯穿整个产品的人物（姓名、称呼、关系）、地点、核心业务数据（如商品、药品、订单、数值），每行一条「名称：内容」，8-15 行。后面每个页面都会使用这份数据，保证前后一致。
 输出格式：
-{"name":"项目名","roles":["角色"],"features":[{"name":"功能名","description":"一句话说明"}]}`,
+{"name":"项目名","roles":["角色"],"features":[{"name":"功能名","description":"一句话说明"}],"sampleData":"父母：王秀兰（68 岁，称呼：妈）\\n子女：林晓雨（女儿）\\n..."}`,
     },
   ]
 }
 
 export function featuresToOps(v: unknown): PatchOp[] {
-  const o = v as { name?: string; roles?: string[]; features?: { name: string; description?: string }[] }
+  const o = v as { name?: string; roles?: string[]; features?: { name: string; description?: string }[]; sampleData?: unknown }
   if (!Array.isArray(o?.features) || !o.features.length) throw new Error('缺少 features 数组')
-  const ops: PatchOp[] = [{ op: 'setFeatures', features: o.features.filter((f) => f?.name), roles: Array.isArray(o.roles) ? o.roles.map(String) : [] }]
+  const sample = typeof o.sampleData === 'string' ? o.sampleData : o.sampleData && typeof o.sampleData === 'object' ? Object.entries(o.sampleData as Record<string, unknown>).map(([k, v]) => `${k}：${typeof v === 'string' ? v : JSON.stringify(v)}`).join('\n') : undefined
+  const ops: PatchOp[] = [{ op: 'setFeatures', features: o.features.filter((f) => f?.name), roles: Array.isArray(o.roles) ? o.roles.map(String) : [], sampleData: sample }]
   if (o.name) ops.push({ op: 'renameProject', name: String(o.name) })
   return ops
 }
@@ -223,7 +226,7 @@ export function layoutPrompt(p: Project, screenId: string, stateIds?: string[]) 
       content: `${projectSummary(p)}
 
 第 4 步：为「${s.name}」(${s.kind === 'overlay' ? `浮层 ${s.overlayType}` : DEVICES[p.device].hint}) 生成低保真线框布局。
-${s.description ? `页面说明：${s.description}\n` : ''}需要生成的状态：${states.map((st) => `${st.id}(${st.name})`).join('、')}
+${s.description ? `页面说明：${s.description}\n` : ''}${p.sampleData ? '页面里出现的人名、地点、数据一律用上面的共享示例数据。\n' : ''}需要生成的状态：${states.map((st) => `${st.id}(${st.name})`).join('、')}
 这个页面上的交互（布局里要有对应元素，文字和交互说明保持一致；可点击的元素都给一个简短的英文 id，如 "save-btn"）：
 ${outgoing.length ? outgoing.join('\n') : '（暂无）'}
 
@@ -315,6 +318,7 @@ export function chatPrompt(p: Project, history: { role: 'user' | 'assistant'; co
 - {"op":"addCondition","condition":{"id","label"}}
 - {"op":"updateCondition","id","label"} / {"op":"removeCondition","id"}
 - {"op":"setEntry","id"}
+- {"op":"setSampleData","text":"每行一条「名称：内容」"}（修改共享示例数据；改了人名等数据时，相关页面的布局也要用 setLayout 同步）
 新增页面时，同时补上进入和离开它的连线，并用 setLayout 给出默认状态的布局。
 插入页面到两个页面之间时，删除原来的直连线（removeTransition）再连新线。
 

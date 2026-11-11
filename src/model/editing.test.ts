@@ -222,3 +222,51 @@ describe('column sizing', () => {
     expect(t.y).toBeGreaterThan(300)
   })
 })
+
+describe('completeness checks', () => {
+  const base = () =>
+    applyPatch(blankProject('t', '子女查看父母位置，父母一键呼叫子女', 'mobile'), [
+      { op: 'setFeatures', features: [{ name: '一键呼叫' }, { name: '查看位置' }], roles: ['子女', '父母'] },
+      { op: 'addScreen', screen: { id: 'bind', name: '绑定', states: [{ id: 'default', name: '默认' }, { id: 'waiting', name: '等待确认' }] } },
+      { op: 'addScreen', screen: { id: 'home', name: '首页' } },
+      { op: 'addScreen', screen: { id: 'call', name: '呼叫中', kind: 'overlay' } },
+      { op: 'addScreen', screen: { id: 'map', name: '位置' } },
+      { op: 'addTransition', transition: { from: 'bind', to: 'bind', toState: 'waiting', action: 'setState', label: '提交' } },
+      { op: 'addTransition', transition: { from: 'bind', fromState: 'waiting', to: 'bind', action: 'setState', label: '取消', kind: 'back' } },
+    ]).project
+  const titles = (p: ReturnType<typeof base>) => checkProject(p).map((i) => i.title)
+
+  it('flags waiting states with no outcome, then clears when outcomes exist', () => {
+    let p = base()
+    expect(titles(p).some((t) => t.includes('等待确认') && t.includes('成功'))).toBe(true)
+    p = applyPatch(p, [
+      { op: 'addState', screenId: 'bind', state: { id: 'expired', name: '已过期' } },
+      { op: 'addTransition', transition: { from: 'bind', fromState: 'waiting', to: 'home', label: '父母已同意' } },
+      { op: 'addTransition', transition: { from: 'bind', fromState: 'waiting', to: 'bind', toState: 'expired', action: 'setState', label: '超时' } },
+    ]).project
+    expect(titles(p).some((t) => t.includes('等待确认'))).toBe(false)
+  })
+
+  it('flags a call with no receiving screen', () => {
+    let p = base()
+    expect(titles(p)).toContain('另一端缺少「来电/未接来电」')
+    p = applyPatch(p, [{ op: 'addScreen', screen: { id: 'incoming', name: '来电', kind: 'overlay' } }]).project
+    expect(titles(p)).not.toContain('另一端缺少「来电/未接来电」')
+  })
+
+  it('flags permissions and missing sample data', () => {
+    let p = base()
+    expect(titles(p).some((t) => t.startsWith('没有权限引导'))).toBe(true)
+    expect(titles(p)).toContain('没有共享示例数据')
+    p = applyPatch(p, [{ op: 'setSampleData', text: '父母：王秀兰\n子女：林晓雨' }]).project
+    expect(titles(p)).not.toContain('没有共享示例数据')
+    expect(p.sampleData).toBe('父母：王秀兰\n子女：林晓雨')
+  })
+
+  it('reads sampleData from step 1 output (string or object)', async () => {
+    const { featuresToOps } = await import('../ai/prompts')
+    const ops = featuresToOps({ features: [{ name: 'a' }], sampleData: { 父母: '王秀兰', 子女: '林晓雨' } })
+    const p = applyPatch(blankProject(), ops).project
+    expect(p.sampleData).toBe('父母：王秀兰\n子女：林晓雨')
+  })
+})

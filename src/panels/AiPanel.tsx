@@ -100,6 +100,7 @@ function Guide() {
           ))}
         </div>
       )}
+      {(project.features.length > 0 || project.sampleData) && <SampleDataEditor />}
       <div className="insp-hint">每一步的结果都可以手动修改，再继续下一步；后面的步骤会以你修改后的内容为准。</div>
     </div>
   )
@@ -292,6 +293,39 @@ function LogicCheck({ onAskAi }: { onAskAi: (text: string) => void }) {
         </div>
       ))}
       <div className="insp-hint">检查基于流程图结构直接计算：可达性、死路、浮层关闭、判断分支、状态进入与恢复路径。</div>
+    </div>
+  )
+}
+
+/** Shared fake data used by every screen (keeps names and numbers consistent across pages). */
+function SampleDataEditor() {
+  const project = useProject()
+  const patch = useStore((s) => s.patch)
+  const [open, setOpen] = useState(false)
+  const lines = (project.sampleData ?? '').split('\n').filter(Boolean)
+  return (
+    <div className="features sample-data">
+      <div className="insp-sub row-between">
+        <span title="所有页面里出现的人名、地点、数据都用这份，生成线框和导出给开发时都会带上">共享示例数据 {lines.length > 0 && <span className="count">{lines.length}</span>}</span>
+        <button className="link-btn" onClick={() => setOpen((v) => !v)}>{open ? '完成' : lines.length ? '编辑' : '添加'}</button>
+      </div>
+      {open ? (
+        <textarea
+          rows={Math.max(5, lines.length + 1)}
+          value={project.sampleData ?? ''}
+          placeholder={'每行一条，如：\n父母：王秀兰（68 岁，称呼：妈）\n子女：林晓雨（女儿）\n常用药：氨氯地平 5mg，每天 08:00'}
+          onChange={(e) => patch([{ op: 'setSampleData', text: e.target.value }])}
+        />
+      ) : lines.length ? (
+        lines.slice(0, 6).map((l, i) => (
+          <div key={i} className="feat">
+            <span>{l}</span>
+          </div>
+        ))
+      ) : (
+        <div className="insp-hint">还没有。重新生成第 1 步会自动写一份，也可以手动添加。</div>
+      )}
+      {!open && lines.length > 6 && <div className="insp-hint">还有 {lines.length - 6} 条…</div>}
     </div>
   )
 }

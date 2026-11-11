@@ -294,3 +294,5 @@ input, textarea, select { font: inherit; color: inherit; }
 .err-msg { font-size: 12px; color: #b91c1c; font-family: ui-monospace, monospace; word-break: break-all; }
 .err-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .err-hint { font-size: 11px; color: var(--mid); }
+.row-between { display: flex; justify-content: space-between; align-items: center; }
+.sample-data textarea { width: 100%; font-size: 12px; line-height: 1.6; }

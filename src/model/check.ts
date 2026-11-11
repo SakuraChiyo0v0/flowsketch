@@ -194,5 +194,123 @@ export function checkProject(p: Project): Issue[] {
     }
   }
 
+  issues.push(...completenessIssues(p))
   return issues
+}
+
+// ---- completeness: gaps that are easy to miss when designing ------------------------
+//
+// These are heuristics over names and descriptions, so they are hints (info/warning)
+// with an AI fix, never auto-fixes. They target the gaps that showed up when building
+// prototypes from designs: async flows with no outcome, one-sided interactions, and
+// permission-dependent features with no permission handling.
+
+const WAIT = /等待|待确认|审核中|处理中|发送中|上传中|支付中|提交中|呼叫中|连接中|匹配中|排队|pending|waiting|processing/i
+const SUCCESS = /成功|已完成|完成|已绑定|已确认|已通过|已接通|已支付|已发送|done|success|connected|confirmed|paid/i
+const FAILURE = /失败|错误|超时|拒绝|过期|无效|未接通|取消|error|fail|timeout|reject|expired/i
+
+/** Features that need OS permissions, and the words that show the design handles them. */
+const PERMISSIONS: { need: RegExp; perm: string }[] = [
+  { need: /定位|位置|地图|附近|导航|轨迹/, perm: '定位' },
+  { need: /语音|录音|通话|呼叫|麦克风|说话/, perm: '麦克风' },
+  { need: /拍照|扫码|二维码|相机|视频通话|人脸/, perm: '相机' },
+  { need: /步数|运动|健康|心率|睡眠/, perm: '运动与健康' },
+  { need: /提醒|通知|推送|消息提醒/, perm: '通知' },
+  { need: /相册|上传图片|选择照片/, perm: '相册' },
+]
+const PERM_HANDLED = /权限|授权|允许|开启|去设置|未开启|已关闭/
+
+/**
+ * One side starts something the other side should receive. `receive` must match a
+ * *screen or state name* (not just a button label), since a receiving side needs a place
+ * to show it; words like "对方接听" on the caller's own screen don't count.
+ */
+const SENDS: { act: RegExp; receive: RegExp; what: string }[] = [
+  { act: /呼叫|打电话|视频通话/, receive: /来电|被叫|通话记录|未接来电/, what: '来电/未接来电' },
+  { act: /留言|发消息|发送消息|私信/, receive: /新消息|未读|消息列表|留言列表|语音留言|收件|聊天/, what: '收到的消息' },
+  { act: /邀请|绑定请求|好友申请|申请加入/, receive: /确认绑定|收到邀请|绑定请求|申请列表|好友请求/, what: '收到的邀请/请求' },
+  { act: /提醒子女|提醒家属|通知家属|推送|告警|报警|无活动/, receive: /通知|推送|告警|提醒列表|消息中心|警报/, what: '收到的提醒/通知' },
+]
+
+function completenessIssues(p: Project): Issue[] {
+  const out: Issue[] = []
+  const screenText = (s: Project['screens'][number]) => [s.name, s.description ?? '', ...s.states.map((st) => st.name)].join(' ')
+  const allText = [p.brief, ...p.features.map((f) => `${f.name} ${f.description ?? ''}`), ...p.screens.map(screenText), ...p.transitions.map((t) => t.label ?? '')].join(' ')
+  const designText = [...p.screens.map(screenText), ...p.transitions.map((t) => `${t.label ?? ''} ${t.branch ?? ''}`)].join(' ')
+
+  // 1. async / waiting states must lead to an outcome (success and failure)
+  for (const s of p.screens) {
+    for (const st of s.states) {
+      if (!WAIT.test(st.name + ' ' + st.id)) continue
+      const outs = p.transitions.filter((t) => t.from === s.id && (t.fromState ?? DEFAULT_STATE) === st.id)
+      // where outcomes can be expressed: target screen/state names, labels, branches, and condition branches
+      const outcomeText = outs
+        .flatMap((t) => {
+          const toScr = p.screens.find((x) => x.id === t.to)
+          const toSt = toScr?.states.find((x) => x.id === t.toState)
+          const cond = p.conditions.find((c) => c.id === t.to)
+          const condBranches = cond ? p.transitions.filter((x) => x.from === cond.id).map((x) => `${x.branch ?? ''} ${p.screens.find((y) => y.id === x.to)?.name ?? ''}`) : []
+          return [t.label ?? '', t.branch ?? '', toSt?.name ?? '', toScr && toScr.id !== s.id ? toScr.name : '', cond?.label ?? '', ...condBranches]
+        })
+        .join(' ')
+      // a wait that leaves to another screen (other than by cancel/back) counts as an outcome
+      const forward = outs.some((t) => t.to !== s.id && t.kind !== 'back' && !/取消|返回|关闭/.test(t.label ?? ''))
+      const hasSuccess = SUCCESS.test(outcomeText) || forward
+      const hasFailure = FAILURE.test(outcomeText.replace(/取消/g, ''))
+      if (hasSuccess && hasFailure) continue
+      const missing = [!hasSuccess && '成功', !hasFailure && '失败/超时'].filter(Boolean).join('和')
+      out.push({
+        id: `wait-outcome-${s.id}-${st.id}`,
+        level: 'warning',
+        title: `「${s.name} · ${st.name}」缺少${missing}的结局`,
+        detail: `这是一个等待状态，流程里没有说明${missing}之后会怎样。用户会一直停在等待里。`,
+        targetId: s.id,
+        aiFix: `「${s.name}」(id: ${s.id}) 的等待状态「${st.name}」(stateId: ${st.id}) 缺少${missing}后的去向。请补上：${!hasSuccess ? '成功后进入的页面或状态；' : ''}${!hasFailure ? '失败或超时后的状态，以及从那里重试或返回的连线；' : ''}必要时新增状态。`,
+      })
+    }
+  }
+
+  // 2. one side starts something; the other side needs a place to receive it
+  //    (receiving places are screen and state names; overlays named "来电" etc. count)
+  const placeText = p.screens.map((s) => [s.name, ...s.states.map((st) => st.name)].join(' ')).join(' ')
+  if (p.roles.length >= 2 || /子女|父母|买家|卖家|司机|乘客|老师|学生|医生|患者|商家|用户端|管理端/.test(p.brief)) {
+    for (const r of SENDS) {
+      if (!r.act.test(allText)) continue
+      if (r.receive.test(placeText)) continue
+      out.push({
+        id: `receive-${r.what}`,
+        level: 'warning',
+        title: `另一端缺少「${r.what}」`,
+        detail: `设计里有一方会发起（${allText.match(r.act)?.[0]}），但没有接收方看到它的页面或状态。`,
+        aiFix: `设计里有一方会「${allText.match(r.act)?.[0]}」，但另一方没有接收的界面。请补上接收方看到${r.what}的页面、浮层或状态，以及从那里继续操作的连线。`,
+      })
+    }
+  }
+
+  // 3. features that depend on OS permissions need permission handling somewhere
+  if (p.device !== 'web') {
+    const needed = PERMISSIONS.filter((x) => x.need.test(allText)).map((x) => x.perm)
+    if (needed.length && !PERM_HANDLED.test(designText)) {
+      out.push({
+        id: 'permissions',
+        level: 'info',
+        title: `没有权限引导（${needed.join('、')}）`,
+        detail: '这些功能依赖系统权限，设计里没有首次授权引导，也没有被拒绝后的状态。',
+        aiFix: `产品用到了 ${needed.join('、')} 权限，但设计里没有权限处理。请为用到这些权限的页面补上「未授权」状态（说明原因并提供「去开启」），并在首次使用时加授权引导。`,
+      })
+    }
+  }
+
+  // 4. shared sample data keeps generated pages consistent
+  if (p.screens.length >= 4 && !p.sampleData?.trim()) {
+    out.push({
+      id: 'no-sample-data',
+      level: 'info',
+      title: '没有共享示例数据',
+      detail: '各页面会各自编造人名和数据，生成的线框和成品前后对不上。',
+      aiFix: '为这个产品写一份共享示例数据（setSampleData）：贯穿各页面的人物（姓名、称呼、关系）、地点和核心业务数据，每行一条「名称：内容」，8-15 行。',
+    })
+  }
+
+  return out
 }

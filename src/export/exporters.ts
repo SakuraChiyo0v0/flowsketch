@@ -1,3 +1,4 @@
+import { checkProject } from '../model/check'
 import type { Project, Transition } from '../model/types'
 import { DEFAULT_STATE, DEVICE_SIZE, DEVICES } from '../model/types'
 import { C, esc, paintTree } from '../render/paint'
@@ -242,6 +243,11 @@ export function specMarkdown(p: Project): string {
     for (const f of p.features) lines.push(`- **${f.name}**${f.description ? `：${f.description}` : ''}`)
     lines.push('')
   }
+  if (p.sampleData) {
+    lines.push('## 共享示例数据', '', '所有页面里出现的人名、地点和数据都使用这一份，保持前后一致。', '')
+    for (const l of p.sampleData.split('\n').filter(Boolean)) lines.push(`- ${l}`)
+    lines.push('')
+  }
   lines.push('## 页面与交互', '')
   // entry first, then pages, then overlays
   const ordered = [...p.screens].sort((a, b) => (a.id === p.entryId ? -1 : b.id === p.entryId ? 1 : a.kind === b.kind ? 0 : a.kind === 'page' ? -1 : 1))
@@ -282,7 +288,15 @@ export function specMarkdown(p: Project): string {
     }
     lines.push('')
   }
+  lines.push(...openIssuesSection(p))
   return lines.join('\n')
+}
+
+/** Open design gaps, appended to the spec so whoever builds from it knows what is undecided. */
+function openIssuesSection(p: Project): string[] {
+  const open = checkProject(p).filter((i) => i.level !== 'info')
+  if (!open.length) return []
+  return ['## 待确认的问题', '', '下面这些地方设计还没有定。实现时如果需要补，请补上并标注出来。', '', ...open.map((i) => `- **${i.title}**：${i.detail}`), '']
 }
 
 export function exportSpec(p: Project) {

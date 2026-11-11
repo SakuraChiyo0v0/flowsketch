@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { relayout } from '../flow/relayout'
 import { exportFlow, exportJson, exportPages, exportSpec } from '../export/exporters'
+import { checkProject } from '../model/check'
 import type { Project } from '../model/types'
 import { DEVICE_KINDS, DEVICES } from '../model/types'
 import { useProject, useStore } from '../store'
@@ -232,7 +233,20 @@ export function TopBar() {
             <button className="menu-item" onClick={() => (doExport(() => exportPages(project, 'svg')), close())}>全部页面线框 SVG</button>
             <button className="menu-item" onClick={() => (doExport(() => exportPages(project, 'png')), close())}>全部页面线框 PNG</button>
             <div className="menu-sep" />
-            <button className="menu-item" onClick={() => (exportSpec(project), close())}>交互说明 Markdown</button>
+            <button
+              className="menu-item"
+              onClick={() => {
+                close()
+                // the spec is what gets handed to developers / AI: surface open gaps first
+                const open = checkProject(project).filter((i) => i.level !== 'info')
+                const list = open.slice(0, 6).map((i) => `· ${i.title}`).join('\n') + (open.length > 6 ? `\n…等 ${open.length} 个` : '')
+                const msg = `设计里还有 ${open.length} 个问题没处理，照着它做出来的成品也会有这些缺口：\n\n${list}\n\n可以在右侧「逻辑检查」里一键修复。仍然导出吗？（问题会列在文档末尾）`
+                if (open.length && !confirm(msg)) return
+                exportSpec(project)
+              }}
+            >
+              交互说明 Markdown（给开发 / AI）
+            </button>
             <button className="menu-item" onClick={() => (exportJson(project), close())}>项目 JSON（可再导入）</button>
           </>
         )}
