@@ -42,9 +42,41 @@ export interface ChatOpts {
   maxTokens?: number
   /** called with the text received so far (streaming) */
   onProgress?: (partial: string) => void
+  /** called before an automatic retry after a transient failure */
+  onRetry?: (attempt: number, err: Error) => void
 }
 
+/** Errors worth retrying: gateway/upstream hiccups, rate limits, dropped connections. */
+export class TransientAiError extends AiError {}
+
+const RETRY_DELAYS = [1500, 4000, 9000]
+
+function sleep(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const t = window.setTimeout(resolve, ms)
+    signal?.addEventListener('abort', () => {
+      window.clearTimeout(t)
+      reject(new DOMException('aborted', 'AbortError'))
+    })
+  })
+}
+
+/** chat() with automatic retries on transient failures. `onRetry` lets the UI say what's happening. */
 export async function chat(ai: AiSettings, messages: ChatMsg[], opts: ChatOpts = {}): Promise<string> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await chatOnce(ai, messages, opts)
+    } catch (e) {
+      if (opts.signal?.aborted) throw e
+      const transient = e instanceof TransientAiError || (e instanceof TypeError && !(e instanceof AiError)) // fetch network errors are TypeError
+      if (!transient || attempt >= RETRY_DELAYS.length) throw e
+      opts.onRetry?.(attempt + 1, e as Error)
+      await sleep(RETRY_DELAYS[attempt], opts.signal)
+    }
+  }
+}
+
+async function chatOnce(ai: AiSettings, messages: ChatMsg[], opts: ChatOpts = {}): Promise<string> {
   const url = `${ai.baseUrl.replace(/\/$/, '')}/chat/completions`
   const res = await fetch(url, {
     method: 'POST',
@@ -60,7 +92,9 @@ export async function chat(ai: AiSettings, messages: ChatMsg[], opts: ChatOpts =
     } catch {
       /* keep raw */
     }
-    throw new AiError(`AI 请求失败 (${res.status})：${msg}`)
+    // 5xx (gateway/upstream) and 429 (rate limit) usually clear up on their own
+    const Err = res.status >= 500 || res.status === 429 ? TransientAiError : AiError
+    throw new Err(`AI 请求失败 (${res.status})：${msg}`)
   }
   const ctype = res.headers.get('content-type') ?? ''
   // some gateways ignore stream:true and answer with a normal JSON body
@@ -77,7 +111,15 @@ export async function chat(ai: AiSettings, messages: ChatMsg[], opts: ChatOpts =
   let finish: string | null = null
   let lastTick = 0
   for (;;) {
-    const { done, value } = await reader.read()
+    let chunk: ReadableStreamReadResult<Uint8Array>
+    try {
+      chunk = await reader.read()
+    } catch (e) {
+      if (opts.signal?.aborted) throw e
+      // connection dropped mid-stream
+      throw new TransientAiError(`AI 连接中断：${(e as Error).message}`)
+    }
+    const { done, value } = chunk
     if (done) break
     buf += dec.decode(value, { stream: true })
     let nl: number
@@ -89,7 +131,11 @@ export async function chat(ai: AiSettings, messages: ChatMsg[], opts: ChatOpts =
       if (payload === '[DONE]') continue
       try {
         const j = JSON.parse(payload)
-        if (j.error) throw new AiError(`AI 出错：${j.error.message ?? JSON.stringify(j.error)}`)
+        if (j.error) {
+          const m = String(j.error.message ?? JSON.stringify(j.error))
+          // upstream errors relayed inside the stream (overloaded, socket hang up, …)
+          throw new (/overload|timeout|socket|ECONN|network|rate|temporar|unavailable|502|503|504|529/i.test(m) ? TransientAiError : AiError)(`AI 出错：${m}`)
+        }
         const ch = j.choices?.[0]
         if (ch?.delta?.content) out += ch.delta.content
         if (ch?.finish_reason) finish = ch.finish_reason
@@ -105,7 +151,8 @@ export async function chat(ai: AiSettings, messages: ChatMsg[], opts: ChatOpts =
     }
   }
   opts.onProgress?.(out)
-  if (!out.trim()) throw new AiError('AI 返回了空内容')
+  // an empty stream that ended without a finish reason is almost always a dropped connection
+  if (!out.trim()) throw new (finish ? AiError : TransientAiError)('AI 返回了空内容')
   if (finish === 'length') throw new AiError('AI 输出超出长度上限被截断，请缩小修改范围后重试')
   return out
 }

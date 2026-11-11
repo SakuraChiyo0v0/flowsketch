@@ -182,7 +182,7 @@ function Chat({ pending, clearPending }: { pending?: string | null; clearPending
       const history = cur.chat.slice(-10).map((c) => ({ role: c.role, content: c.role === 'assistant' ? JSON.stringify({ reply: c.text + fate(c), summary: c.proposal?.summary ?? '', ops: [] }) : c.text }))
       const scr = cur.screens.find((s) => s.id === screenId)
       const focus = view === 'page' && scr ? `页面「${scr.name}」(id: ${scr.id}) 的状态 ${stateId}` : undefined
-      const res = await chatJson(st.ai, chatPrompt(cur, history, focus), parseChat, { signal, maxTokens: 16000, onProgress: (t) => useStore.getState().setBusy(`AI 正在准备修改 · 已收到 ${progressHint(t)}`) })
+      const res = await chatJson(st.ai, chatPrompt(cur, history, focus), parseChat, { signal, maxTokens: 16000, onProgress: (t) => useStore.getState().setBusy(`AI 正在准备修改 · 已收到 ${progressHint(t)}`), onRetry: (n) => useStore.getState().setBusy(`AI 正在准备修改 · 网络波动，第 ${n} 次重试…`) })
       const am: ChatMessage = {
         id: nanoid(8),
         role: 'assistant',

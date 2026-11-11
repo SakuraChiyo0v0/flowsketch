@@ -34,16 +34,17 @@ export async function runStep(key: StepKey, opts: { screenIds?: string[] } = {})
   const label = `第 ${n} 步：${STEPS[n - 1].name}`
   const signal = begin(label)
   const onProgress = (t: string) => useStore.getState().setBusy(`${label} · 已收到 ${progressHint(t)}`)
+  const onRetry = (n: number) => useStore.getState().setBusy(`${label} · 网络波动，第 ${n} 次重试…`)
   try {
     if (key === 'features') {
-      const ops = await chatJson(ai, featuresPrompt(st.project()), featuresToOps, { signal, onProgress })
+      const ops = await chatJson(ai, featuresPrompt(st.project()), featuresToOps, { signal, onProgress, onRetry })
       commit(ops, 1)
       return `已生成 ${useStore.getState().project().features.length} 个功能点`
     }
     if (key === 'sitemap') {
       // regenerating the structure replaces pages and everything that depends on them
       const p = { ...st.project(), screens: [], transitions: [], conditions: [], entryId: undefined }
-      const ops = await chatJson(ai, sitemapPrompt(p), (v) => sitemapToOps(v, p), { signal, onProgress })
+      const ops = await chatJson(ai, sitemapPrompt(p), (v) => sitemapToOps(v, p), { signal, onProgress, onRetry })
       useStore.getState().update((x) => ({ ...x, screens: [], transitions: [], conditions: [], positions: {}, entryId: undefined, guideStep: Math.min(x.guideStep, 1) }))
       const errs = commit(ops, 2)
       await relayout()
@@ -52,7 +53,7 @@ export async function runStep(key: StepKey, opts: { screenIds?: string[] } = {})
     if (key === 'flows') {
       // regenerate from a clean graph so repeated runs don't pile up edges
       const base = { ...st.project(), transitions: [], conditions: [] }
-      const ops = await chatJson(ai, flowsPrompt(base), (v) => flowsToOps(v, base), { signal, onProgress, maxTokens: 12000 })
+      const ops = await chatJson(ai, flowsPrompt(base), (v) => flowsToOps(v, base), { signal, onProgress, onRetry, maxTokens: 12000 })
       useStore.getState().update((x) => {
         const positions = { ...x.positions }
         for (const c of x.conditions) delete positions[c.id]
@@ -79,7 +80,7 @@ export async function runStep(key: StepKey, opts: { screenIds?: string[] } = {})
         try {
           const cur = useStore.getState().project()
           const allowed = cur.screens.find((x) => x.id === s.id)?.states.map((x) => x.id) ?? []
-          const ops = await chatJson(ai, layoutPrompt(cur, s.id), (v) => layoutToOps(v, s.id, allowed, useStore.getState().project()), { signal, maxTokens: 12000 })
+          const ops = await chatJson(ai, layoutPrompt(cur, s.id), (v) => layoutToOps(v, s.id, allowed, useStore.getState().project()), { signal, maxTokens: 12000, onRetry: (n) => console.warn(`layout ${s.id}: retry ${n}`) })
           commit(ops, 3)
           done++
         } catch (e) {
